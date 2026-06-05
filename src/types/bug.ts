@@ -38,6 +38,20 @@ export type GoogleSheetsConfig = {
   lastFetched?: number;
 };
 
+export type JiraConfig = {
+  host: string;
+  email: string;
+  apiToken: string;
+  jql: string;
+  useProxy: boolean;
+  proxyUrl?: string;
+  pollInterval: number;
+  lastFetched?: number;
+  projectKey?: string;
+  projects?: { id: string; key: string; name: string }[];
+  selectedProjects?: string[];
+};
+
 // Multi-provider AI support
 export type AIProvider = "groq" | "openai" | "google" | "anthropic";
 
@@ -48,7 +62,7 @@ export type AIProviderConfig = {
   models: { id: string; name: string; maxTokens: number }[];
   keyPrefix: string;
   keyUrl: string;
-};
+ };
 
 export type UserPreferences = {
   theme: "light" | "dark";
@@ -58,6 +72,13 @@ export type UserPreferences = {
   aiModel?: string;
   apiKeys?: Partial<Record<AIProvider, string>>;
   googleSheetsApiKey?: string;
+  jiraHost?: string;
+  jiraEmail?: string;
+  jiraApiToken?: string;
+  jiraJql?: string;
+  jiraUseProxy?: boolean;
+  jiraProxyUrl?: string;
+  jiraSelectedProjects?: string[];
 };
 
 // Legacy compat - keep for template fingerprints

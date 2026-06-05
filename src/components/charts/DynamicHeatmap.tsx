@@ -13,9 +13,10 @@ interface Props {
   col1: string;
   col2: string;
   title: string;
+  theme?: "light" | "dark";
 }
 
-export function DynamicHeatmap({ rows, col1, col2, title }: Props) {
+export function DynamicHeatmap({ rows, col1, col2, title, theme }: Props) {
   const { values1, values2, heatData, maxCount } = useMemo(() => {
     // Build frequency maps — O(n) instead of O(n * rows * cols)
     const c1Canonical: Record<string, string> = {};
@@ -67,6 +68,14 @@ export function DynamicHeatmap({ rows, col1, col2, title }: Props) {
 
   if (values1.length === 0 || values2.length === 0) return null;
 
+  const isDark = theme !== "light";
+  const colors = {
+    subText: isDark ? "#94a3b8" : "#64748b",
+    line: isDark ? "#334155" : "#cbd5e1",
+    label: isDark ? "#e2e8f0" : "#1e293b",
+    visualMapColors: isDark ? ["#1e293b", "#0ea5e9", "#8b5cf6"] : ["#f1f5f9", "#0ea5e9", "#8b5cf6"]
+  };
+
   const option: echarts.EChartsCoreOption = {
     tooltip: {
       backgroundColor: "rgba(15,15,20,0.9)",
@@ -79,16 +88,16 @@ export function DynamicHeatmap({ rows, col1, col2, title }: Props) {
     xAxis: {
       type: "category",
       data: values2.map(v => v.length > 10 ? v.slice(0, 9) + "…" : v),
-      axisLabel: { fontSize: 10, color: "#94a3b8", rotate: 30 },
+      axisLabel: { fontSize: 10, color: colors.subText, rotate: 30 },
       axisTick: { show: false },
-      axisLine: { lineStyle: { color: "#334155" } },
+      axisLine: { lineStyle: { color: colors.line } },
     },
     yAxis: {
       type: "category",
       data: values1.map(v => v.length > 14 ? v.slice(0, 12) + "…" : v),
-      axisLabel: { fontSize: 10, color: "#94a3b8" },
+      axisLabel: { fontSize: 10, color: colors.subText },
       axisTick: { show: false },
-      axisLine: { lineStyle: { color: "#334155" } },
+      axisLine: { lineStyle: { color: colors.line } },
     },
     visualMap: {
       min: 0,
@@ -97,13 +106,13 @@ export function DynamicHeatmap({ rows, col1, col2, title }: Props) {
       orient: "vertical",
       right: 0,
       top: "center",
-      inRange: { color: ["#1e293b", "#0ea5e9", "#8b5cf6"] },
-      textStyle: { color: "#94a3b8", fontSize: 10 },
+      inRange: { color: colors.visualMapColors },
+      textStyle: { color: colors.subText, fontSize: 10 },
     },
     series: [{
       type: "heatmap",
       data: heatData,
-      label: { show: true, fontSize: 11, color: "#e2e8f0" },
+      label: { show: true, fontSize: 11, color: colors.label },
       itemStyle: { borderRadius: 3, borderColor: "transparent", borderWidth: 2 },
       emphasis: { itemStyle: { borderColor: "#0ea5e9", borderWidth: 2 } },
       animationDuration: 800,

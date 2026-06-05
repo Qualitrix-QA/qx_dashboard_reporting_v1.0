@@ -23,9 +23,10 @@ interface Props {
   analysis: DataAnalysis;
   agg: DynamicAggregations;
   aiSchema?: AISchema | null;
+  theme?: "light" | "dark";
 }
 
-export function DynamicCharts({ rows, analysis, agg, aiSchema }: Props) {
+export function DynamicCharts({ rows, analysis, agg, aiSchema, theme }: Props) {
   // Use AI schema charts or fallback schema charts
   const charts = useMemo(() => {
     if (aiSchema?.charts && aiSchema.charts.length > 0) {
@@ -45,7 +46,7 @@ export function DynamicCharts({ rows, analysis, agg, aiSchema }: Props) {
         if (!counts || Object.keys(counts).length === 0) return null;
         return (
           <div key={chart.id || index} data-chart-card>
-            <SeverityPieChart data={counts} title={chart.title} />
+            <SeverityPieChart data={counts} title={chart.title} theme={theme} />
           </div>
         );
       }
@@ -54,7 +55,7 @@ export function DynamicCharts({ rows, analysis, agg, aiSchema }: Props) {
         if (!counts || Object.keys(counts).length === 0) return null;
         return (
           <div key={chart.id || index} data-chart-card>
-            <VBarChart data={counts} title={chart.title} color={CHART_COLORS[index % CHART_COLORS.length]} />
+            <VBarChart data={counts} title={chart.title} color={CHART_COLORS[index % CHART_COLORS.length]} theme={theme} />
           </div>
         );
       }
@@ -63,21 +64,21 @@ export function DynamicCharts({ rows, analysis, agg, aiSchema }: Props) {
         if (!counts || Object.keys(counts).length === 0) return null;
         return (
           <div key={chart.id || index} data-chart-card>
-            <HBarChart data={counts} title={chart.title} color={CHART_COLORS[index % CHART_COLORS.length]} />
+            <HBarChart data={counts} title={chart.title} color={CHART_COLORS[index % CHART_COLORS.length]} theme={theme} />
           </div>
         );
       }
       case "line":
         return (
           <div key={chart.id || index} className="col-span-full md:col-span-2 lg:col-span-3" data-chart-card>
-            <DynamicLineChart rows={rows} colName={chart.columns[0]} title={chart.title} />
+            <DynamicLineChart rows={rows} colName={chart.columns[0]} title={chart.title} theme={theme} />
           </div>
         );
       case "heatmap":
         if (chart.columns.length >= 2) {
           return (
             <div key={chart.id || index} data-chart-card>
-              <DynamicHeatmap rows={rows} col1={chart.columns[0]} col2={chart.columns[1]} title={chart.title} />
+              <DynamicHeatmap rows={rows} col1={chart.columns[0]} col2={chart.columns[1]} title={chart.title} theme={theme} />
             </div>
           );
         }
@@ -86,7 +87,7 @@ export function DynamicCharts({ rows, analysis, agg, aiSchema }: Props) {
         if (chart.columns.length >= 2) {
           return (
             <div key={chart.id || index} data-chart-card>
-              <DynamicStackedBar rows={rows} groupCol={chart.columns[0]} stackCol={chart.columns[1]} title={chart.title} />
+              <DynamicStackedBar rows={rows} groupCol={chart.columns[0]} stackCol={chart.columns[1]} title={chart.title} theme={theme} />
             </div>
           );
         }

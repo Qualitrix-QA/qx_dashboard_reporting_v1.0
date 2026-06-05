@@ -22,6 +22,14 @@ export function detectDataTypeHeuristic(analysis: DataAnalysis): DetectedDataTyp
   const names = analysis.columns.map(c => c.name.toLowerCase());
   const joined = names.join(" ");
 
+  // Check if it has a Key column indicating Jira-style issue keys (like project letters-dash-number)
+  const keyCol = analysis.columns.find(c => c.name.toLowerCase() === "key");
+  const hasJiraKeys = keyCol && keyCol.topValues.some(v => /^[A-Z\d]+-\d+$/i.test(v.value.trim()));
+
+  if (hasJiraKeys || names.some(n => n.includes("jira") || n === "issue key" || n === "ticket key")) {
+    return "bug_report";
+  }
+
   // Check value content too
   const allValues = analysis.columns
     .filter(c => c.type === "categorical")
@@ -52,6 +60,11 @@ export function detectDataTypeHeuristic(analysis: DataAnalysis): DetectedDataTyp
   // Bug report: severity without explicit bug keyword
   if (hasSeverity) return "bug_report";
 
+  // Jira standard fallback (if contains status/priority/assignee/reporter)
+  if (names.includes("assignee") && names.includes("status") && names.includes("priority")) {
+    return "bug_report";
+  }
+
   return "generic";
 }
 
@@ -59,7 +72,8 @@ export function detectDataTypeHeuristic(analysis: DataAnalysis): DetectedDataTyp
 
 function detectColumnMap(analysis: DataAnalysis): AISchemaColumnMap {
   const map: AISchemaColumnMap = {};
-  const cols = analysis.columns.filter(c => c.type === "categorical" && !INTERNAL_COLUMNS.includes(c.name));
+  // Allow mapping regardless of whether it's categorized as "categorical" (to handle high cardinality assignees/reporters)
+  const cols = analysis.columns.filter(c => !INTERNAL_COLUMNS.includes(c.name));
 
   for (const col of cols) {
     const n = col.name.toLowerCase();
@@ -76,6 +90,17 @@ function detectColumnMap(analysis: DataAnalysis): AISchemaColumnMap {
     if (!map.typeColumn && /\b(type|category|classification|kind)\b/i.test(n) && !n.includes("priority")) map.typeColumn = col.name;
     if (!map.assigneeColumn && /\b(assignee|assigned|owner|tester|developer|reporter)\b/i.test(n)) map.assigneeColumn = col.name;
     if (!map.releaseColumn && /\b(release|version|sprint|milestone|build)\b/i.test(n)) map.releaseColumn = col.name;
+  }
+
+  // Fallback for moduleColumn if none matched the keywords
+  if (!map.moduleColumn) {
+    const fallbackCol = cols.find(c => {
+      const ln = c.name.toLowerCase();
+      return (ln === "project" || ln === "components" || ln === "labels") && c.uniqueCount >= 2;
+    });
+    if (fallbackCol) {
+      map.moduleColumn = fallbackCol.name;
+    }
   }
 
   return map;
@@ -121,25 +146,39 @@ export function generateFallbackSchema(
 }
 
 function buildBugKPIs(kpis: AISchemaKPI[], colMap: AISchemaColumnMap, agg: DynamicAggregations) {
-  if (colMap.severityColumn) {
-    const counts = agg.columnCounts[colMap.severityColumn] || {};
+  const sevCol = colMap.severityColumn || colMap.priorityColumn;
+  if (sevCol) {
+    const counts = agg.columnCounts[sevCol] || {};
     const sevValues = Object.keys(counts).map(k => k.toLowerCase());
-    if (sevValues.some(v => v.includes("critical") || v.includes("blocker")))
-      kpis.push({ id: "critical", label: "Critical", column: colMap.severityColumn, value: findMatchingValue(counts, ["critical", "blocker"]), type: "count_value", color: "red" });
-    if (sevValues.some(v => v === "high"))
-      kpis.push({ id: "high", label: "High", column: colMap.severityColumn, value: findMatchingValue(counts, ["high"]), type: "count_value", color: "orange" });
-    if (sevValues.some(v => v === "medium" || v === "major"))
-      kpis.push({ id: "medium", label: "Medium", column: colMap.severityColumn, value: findMatchingValue(counts, ["medium", "major"]), type: "count_value", color: "yellow" });
-    if (sevValues.some(v => v === "low" || v === "minor"))
-      kpis.push({ id: "low", label: "Low", column: colMap.severityColumn, value: findMatchingValue(counts, ["low", "minor"]), type: "count_value", color: "green" });
+    
+    const critKws = ["critical", "blocker", "highest", "p1"];
+    const highKws = ["high", "major", "p2"];
+    const medKws = ["medium", "minor", "p3"];
+    const lowKws = ["low", "trivial", "lowest", "p4"];
+
+    if (sevValues.some(v => critKws.some(kw => v === kw || v.includes(kw))))
+      kpis.push({ id: "critical", label: "Critical / P1", column: sevCol, value: findMatchingValue(counts, critKws), type: "count_value", color: "red" });
+    if (sevValues.some(v => highKws.some(kw => v === kw || v.includes(kw))))
+      kpis.push({ id: "high", label: "High / P2", column: sevCol, value: findMatchingValue(counts, highKws), type: "count_value", color: "orange" });
+    if (sevValues.some(v => medKws.some(kw => v === kw || v.includes(kw))))
+      kpis.push({ id: "medium", label: "Medium / P3", column: sevCol, value: findMatchingValue(counts, medKws), type: "count_value", color: "yellow" });
+    if (sevValues.some(v => lowKws.some(kw => v === kw || v.includes(kw))))
+      kpis.push({ id: "low", label: "Low / P4", column: sevCol, value: findMatchingValue(counts, lowKws), type: "count_value", color: "green" });
   }
+
   if (colMap.statusColumn) {
     const counts = agg.columnCounts[colMap.statusColumn] || {};
     const statValues = Object.keys(counts).map(k => k.toLowerCase());
-    if (statValues.some(v => v === "open" || v === "new" || v === "reopened"))
-      kpis.push({ id: "open", label: "Open", column: colMap.statusColumn, value: findMatchingValue(counts, ["open", "new", "reopened"]), type: "count_value", color: "red" });
-    if (statValues.some(v => v.includes("closed") || v.includes("fixed") || v.includes("resolved")))
-      kpis.push({ id: "closed", label: "Closed/Fixed", column: colMap.statusColumn, value: findMatchingValue(counts, ["closed", "fixed", "resolved", "done"]), type: "count_value", color: "green" });
+    
+    const openKeywords = ["open", "new", "reopened", "to do", "todo", "in progress", "backlog", "ready", "under review", "in review"];
+    const closedKeywords = ["closed", "fixed", "resolved", "done", "ready for production", "production", "completed"];
+
+    if (statValues.some(v => openKeywords.some(kw => v === kw || v.includes(kw)))) {
+      kpis.push({ id: "open", label: "Open / In Progress", column: colMap.statusColumn, value: findMatchingValue(counts, openKeywords), type: "count_value", color: "red" });
+    }
+    if (statValues.some(v => closedKeywords.some(kw => v === kw || v.includes(kw)))) {
+      kpis.push({ id: "closed", label: "Closed / Done", column: colMap.statusColumn, value: findMatchingValue(counts, closedKeywords), type: "count_value", color: "green" });
+    }
   }
 }
 
@@ -209,26 +248,60 @@ function buildGenericKPIs(kpis: AISchemaKPI[], analysis: DataAnalysis, agg: Dyna
 // ─── Chart builders ─────────────────────────────────────────────────────────
 
 function buildBugCharts(charts: AISchemaChart[], colMap: AISchemaColumnMap, analysis: DataAnalysis, p: number) {
-  if (colMap.severityColumn && colMap.moduleColumn) {
-    charts.push({ id: "sev_mod_heat", type: "heatmap", title: "Severity × Module Heatmap", columns: [colMap.moduleColumn, colMap.severityColumn], priority: p-- });
+  const sevCol = colMap.severityColumn || colMap.priorityColumn;
+  const modCol = colMap.moduleColumn || analysis.columns.find(c => ["project", "components", "__sheet"].includes(c.name.toLowerCase()))?.name;
+
+  const getUniqueCount = (colName: string | undefined) => {
+    if (!colName) return 0;
+    return analysis.columns.find(c => c.name === colName)?.uniqueCount || 0;
+  };
+
+  const sevUnique = getUniqueCount(sevCol);
+  const modUnique = getUniqueCount(modCol);
+
+  if (sevCol && modCol && sevUnique >= 2 && modUnique >= 2) {
+    charts.push({ id: "sev_mod_heat", type: "heatmap", title: `${sevCol} × ${modCol} Heatmap`, columns: [modCol, sevCol], priority: p-- });
   }
-  if (colMap.severityColumn) charts.push({ id: "sev_dist", type: "pie", title: "Severity Distribution", columns: [colMap.severityColumn], priority: p-- });
-  if (colMap.moduleColumn) charts.push({ id: "mod_dist", type: "hbar", title: "Module-wise Bug Distribution", columns: [colMap.moduleColumn], priority: p-- });
-  if (colMap.typeColumn) charts.push({ id: "type_dist", type: "pie", title: "Type Distribution", columns: [colMap.typeColumn], priority: p-- });
-  if (colMap.statusColumn) charts.push({ id: "status_dist", type: "pie", title: "Status Distribution", columns: [colMap.statusColumn], priority: p-- });
-  if (colMap.priorityColumn) charts.push({ id: "prio_dist", type: "pie", title: "Priority Distribution", columns: [colMap.priorityColumn], priority: p-- });
-  if (colMap.assigneeColumn) charts.push({ id: "assignee_dist", type: "hbar", title: "Assignee Distribution", columns: [colMap.assigneeColumn], priority: p-- });
+  if (sevCol && sevUnique >= 2) {
+    charts.push({ id: "sev_dist", type: "pie", title: `${sevCol} Distribution`, columns: [sevCol], priority: p-- });
+  }
+  if (modCol && modUnique >= 2) {
+    charts.push({ id: "mod_dist", type: "hbar", title: `${modCol}-wise Issue Distribution`, columns: [modCol], priority: p-- });
+  }
+  if (colMap.typeColumn && getUniqueCount(colMap.typeColumn) >= 2) {
+    charts.push({ id: "type_dist", type: "vbar", title: "Type Distribution", columns: [colMap.typeColumn], priority: p-- });
+  }
+  if (colMap.statusColumn && getUniqueCount(colMap.statusColumn) >= 2) {
+    charts.push({ id: "status_dist", type: "vbar", title: "Status Distribution", columns: [colMap.statusColumn], priority: p-- });
+  }
+  if (colMap.assigneeColumn && getUniqueCount(colMap.assigneeColumn) >= 2) {
+    charts.push({ id: "assignee_dist", type: "hbar", title: "Assignee Distribution", columns: [colMap.assigneeColumn], priority: p-- });
+  }
+
   // Fallback: add any remaining categoricals
-  addFallbackCharts(charts, analysis, [colMap.severityColumn, colMap.moduleColumn, colMap.typeColumn, colMap.statusColumn, colMap.priorityColumn, colMap.assigneeColumn].filter(Boolean) as string[], p);
+  addFallbackCharts(charts, analysis, [sevCol, modCol, colMap.typeColumn, colMap.statusColumn, colMap.assigneeColumn].filter(Boolean) as string[], p);
 }
 
 function buildExecCharts(charts: AISchemaChart[], colMap: AISchemaColumnMap, analysis: DataAnalysis, p: number) {
-  if (colMap.moduleColumn && colMap.resultColumn) {
+  const getUniqueCount = (colName: string | undefined) => {
+    if (!colName) return 0;
+    return analysis.columns.find(c => c.name === colName)?.uniqueCount || 0;
+  };
+
+  const modUnique = getUniqueCount(colMap.moduleColumn);
+  const resultUnique = getUniqueCount(colMap.resultColumn);
+  const prioUnique = getUniqueCount(colMap.priorityColumn);
+
+  if (colMap.moduleColumn && colMap.resultColumn && modUnique >= 2 && resultUnique >= 2) {
     charts.push({ id: "mod_result_heat", type: "heatmap", title: "Module × Result", columns: [colMap.moduleColumn, colMap.resultColumn], priority: p-- });
   }
-  if (colMap.resultColumn) charts.push({ id: "result_dist", type: "pie", title: "Result Distribution", columns: [colMap.resultColumn], priority: p-- });
-  if (colMap.moduleColumn) charts.push({ id: "mod_dist", type: "hbar", title: "Module-wise TC Distribution", columns: [colMap.moduleColumn], priority: p-- });
-  if (colMap.priorityColumn && colMap.resultColumn) {
+  if (colMap.resultColumn && resultUnique >= 2) {
+    charts.push({ id: "result_dist", type: "pie", title: "Result Distribution", columns: [colMap.resultColumn], priority: p-- });
+  }
+  if (colMap.moduleColumn && modUnique >= 2) {
+    charts.push({ id: "mod_dist", type: "hbar", title: "Module-wise TC Distribution", columns: [colMap.moduleColumn], priority: p-- });
+  }
+  if (colMap.priorityColumn && colMap.resultColumn && prioUnique >= 2 && resultUnique >= 2) {
     charts.push({ id: "prio_result", type: "stacked_bar", title: "Priority × Result", columns: [colMap.priorityColumn, colMap.resultColumn], priority: p-- });
   }
   // Run column detection
@@ -242,12 +315,27 @@ function buildExecCharts(charts: AISchemaChart[], colMap: AISchemaColumnMap, ana
 }
 
 function buildTCCharts(charts: AISchemaChart[], colMap: AISchemaColumnMap, analysis: DataAnalysis, p: number) {
-  if (colMap.priorityColumn) charts.push({ id: "prio_dist", type: "pie", title: "Priority Distribution", columns: [colMap.priorityColumn], priority: p-- });
-  if (colMap.moduleColumn) charts.push({ id: "mod_dist", type: "hbar", title: "Module-wise TC Distribution", columns: [colMap.moduleColumn], priority: p-- });
-  if (colMap.priorityColumn && colMap.statusColumn) {
+  const getUniqueCount = (colName: string | undefined) => {
+    if (!colName) return 0;
+    return analysis.columns.find(c => c.name === colName)?.uniqueCount || 0;
+  };
+
+  const prioUnique = getUniqueCount(colMap.priorityColumn);
+  const modUnique = getUniqueCount(colMap.moduleColumn);
+  const statusUnique = getUniqueCount(colMap.statusColumn);
+
+  if (colMap.priorityColumn && prioUnique >= 2) {
+    charts.push({ id: "prio_dist", type: "pie", title: "Priority Distribution", columns: [colMap.priorityColumn], priority: p-- });
+  }
+  if (colMap.moduleColumn && modUnique >= 2) {
+    charts.push({ id: "mod_dist", type: "hbar", title: "Module-wise TC Distribution", columns: [colMap.moduleColumn], priority: p-- });
+  }
+  if (colMap.priorityColumn && colMap.statusColumn && prioUnique >= 2 && statusUnique >= 2) {
     charts.push({ id: "prio_status", type: "stacked_bar", title: "Priority × Status", columns: [colMap.priorityColumn, colMap.statusColumn], priority: p-- });
   }
-  if (colMap.statusColumn) charts.push({ id: "status_dist", type: "pie", title: "Status Distribution", columns: [colMap.statusColumn], priority: p-- });
+  if (colMap.statusColumn && statusUnique >= 2) {
+    charts.push({ id: "status_dist", type: "vbar", title: "Status Distribution", columns: [colMap.statusColumn], priority: p-- });
+  }
   addFallbackCharts(charts, analysis, [colMap.priorityColumn, colMap.moduleColumn, colMap.statusColumn].filter(Boolean) as string[], p);
 }
 
@@ -264,8 +352,18 @@ function addFallbackCharts(charts: AISchemaChart[], analysis: DataAnalysis, excl
     .sort((a, b) => a.uniqueCount - b.uniqueCount)
     .slice(0, Math.max(0, 8 - charts.length));
 
+  let pieCount = charts.filter(c => c.type === "pie").length;
+
   for (const col of categoricals) {
-    const type = col.uniqueCount <= 7 ? "pie" : col.uniqueCount <= 12 ? "vbar" : "hbar";
+    let type: "pie" | "vbar" | "hbar" = "vbar";
+    if (col.uniqueCount <= 5 && pieCount < 2) {
+      type = "pie";
+      pieCount++;
+    } else if (col.uniqueCount <= 10) {
+      type = "vbar";
+    } else {
+      type = "hbar";
+    }
     charts.push({ id: `auto_${col.name}`, type, title: `${col.name} Distribution`, columns: [col.name], priority: p-- });
   }
 }
@@ -415,6 +513,7 @@ RULES:
 - **CRITICAL**: ONLY use categorical columns for charts (e.g., Status, Priority, Severity, Assignee, Environment). NEVER use free-text columns (like Comments, Descriptions, Titles, Steps, Actual Result) or unique ID columns.
 - **CRITICAL**: You MUST include a "heatmap" chart for cross-analysis (e.g., Assignee × Severity, Status × Severity, Priority × Result, Environment × Severity, or Module × Status).
 - **CRITICAL**: You MUST include a "line" chart if a Date column exists.
+- **CRITICAL**: Limit the 'pie' chart type to a maximum of 2 charts. Prefer 'vbar' for status, priority, and categories with fewer than 10 options. Prefer 'hbar' for assignee, component, or categories with many options (to prevent labels from overlapping).
 - For charts: prioritize domain-relevant distributions over generic ones. Ensure charts are logically sound and provide actionable insights.
 - Use "count_value" type when counting specific values, "count" for total/unique counts
 - Use "__total" as column for total records KPI
@@ -448,6 +547,23 @@ RULES:
     validColumns.add("__total");
     validColumns.add("__quality");
 
+    // Post-process fallbacks for critical columns
+    if (!parsed.columnMap) parsed.columnMap = {};
+    if (!parsed.columnMap.severityColumn) {
+      if (validColumns.has("Priority")) parsed.columnMap.severityColumn = "Priority";
+      else if (validColumns.has("Severity")) parsed.columnMap.severityColumn = "Severity";
+    }
+    if (!parsed.columnMap.moduleColumn) {
+      if (validColumns.has("Project")) parsed.columnMap.moduleColumn = "Project";
+      else if (validColumns.has("Components")) parsed.columnMap.moduleColumn = "Components";
+    }
+    if (!parsed.columnMap.statusColumn && validColumns.has("Status")) {
+      parsed.columnMap.statusColumn = "Status";
+    }
+    if (!parsed.columnMap.assigneeColumn && validColumns.has("Assignee")) {
+      parsed.columnMap.assigneeColumn = "Assignee";
+    }
+
     parsed.kpis = parsed.kpis.filter(k => validColumns.has(k.column));
     
     // ── STRICT STRUCTURAL FILTER: Block the AI from rendering garbage charts ──
@@ -458,6 +574,9 @@ RULES:
         
         const colDef = columns.find(x => x.name === col);
         if (!colDef) return true;
+
+        // Ban single-value columns (uniqueCount < 2)
+        if (colDef.uniqueCount < 2) return false;
 
         // 1. Hard ban on known free-text columns
         if (colDef.type === "text") return false;

@@ -13,6 +13,7 @@ interface Props {
   groupCol: string;
   stackCol: string;
   title: string;
+  theme?: "light" | "dark";
 }
 
 const STACK_COLORS = [
@@ -20,7 +21,7 @@ const STACK_COLORS = [
   "#0ea5e9", "#8b5cf6", "#ec4899", "#3b82f6",
 ];
 
-export function DynamicStackedBar({ rows, groupCol, stackCol, title }: Props) {
+export function DynamicStackedBar({ rows, groupCol, stackCol, title, theme }: Props) {
   const { groups, stackValues, seriesData } = useMemo(() => {
     // Single-pass: build cross-frequency map — O(n)
     const groupCanonical: Record<string, string> = {};
@@ -87,6 +88,14 @@ export function DynamicStackedBar({ rows, groupCol, stackCol, title }: Props) {
 
   if (groups.length === 0) return null;
 
+  const isDark = theme !== "light";
+  const colors = {
+    text: isDark ? "#e2e8f0" : "#475569",
+    subText: isDark ? "#94a3b8" : "#64748b",
+    line: isDark ? "#334155" : "#cbd5e1",
+    grid: isDark ? "#1e293b" : "#f1f5f9",
+  };
+
   const option: echarts.EChartsCoreOption = {
     tooltip: {
       trigger: "axis",
@@ -97,7 +106,7 @@ export function DynamicStackedBar({ rows, groupCol, stackCol, title }: Props) {
     },
     legend: {
       data: stackValues,
-      textStyle: { color: "#94a3b8", fontSize: 10 },
+      textStyle: { color: colors.subText, fontSize: 10 },
       bottom: 0,
       itemWidth: 12,
       itemHeight: 10,
@@ -106,14 +115,14 @@ export function DynamicStackedBar({ rows, groupCol, stackCol, title }: Props) {
     xAxis: {
       type: "category",
       data: groups.map(g => g.length > 14 ? g.slice(0, 12) + "…" : g),
-      axisLabel: { fontSize: 10, color: "#94a3b8", rotate: 25 },
-      axisLine: { lineStyle: { color: "#334155" } },
+      axisLabel: { fontSize: 10, color: colors.subText, rotate: 25 },
+      axisLine: { lineStyle: { color: colors.line } },
       axisTick: { show: false },
     },
     yAxis: {
       type: "value",
-      axisLabel: { fontSize: 10, color: "#94a3b8" },
-      splitLine: { lineStyle: { color: "#1e293b", type: "dashed" } },
+      axisLabel: { fontSize: 10, color: colors.subText },
+      splitLine: { lineStyle: { color: colors.grid, type: "dashed" } },
     },
     series: seriesData,
   };

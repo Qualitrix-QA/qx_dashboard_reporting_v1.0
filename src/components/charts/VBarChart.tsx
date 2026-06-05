@@ -10,6 +10,7 @@ interface VBarChartProps {
   data: Record<string, number>;
   title: string;
   color?: string;
+  theme?: "light" | "dark";
 }
 
 const BAR_COLORS = [
@@ -17,11 +18,21 @@ const BAR_COLORS = [
   "#eab308", "#ef4444", "#ec4899", "#3b82f6",
 ];
 
-export function VBarChart({ data, title }: VBarChartProps) {
+export function VBarChart({ data, title, theme }: VBarChartProps) {
   const total = Object.values(data).reduce((s, v) => s + v, 0);
   const chartData = Object.entries(data)
     .sort(([, a], [, b]) => b - a);
     // Removed .slice(0, 12) to show all modules
+
+  const isDark = theme !== "light";
+  const colors = {
+    text: isDark ? "#e2e8f0" : "#475569",
+    subText: isDark ? "#94a3b8" : "#64748b",
+    line: isDark ? "#334155" : "#cbd5e1",
+    grid: isDark ? "#1e293b" : "#f1f5f9",
+    zoomFill: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+    label: isDark ? "#e2e8f0" : "#475569"
+  };
 
   const option: echarts.EChartsCoreOption = {
     tooltip: {
@@ -35,21 +46,21 @@ export function VBarChart({ data, title }: VBarChartProps) {
     dataZoom: [
       { type: "inside", xAxisIndex: 0 },
       { type: "slider", show: true, xAxisIndex: 0, bottom: 0, height: 16, 
-        borderColor: "transparent", fillerColor: "rgba(255,255,255,0.1)", 
+        borderColor: "transparent", fillerColor: colors.zoomFill, 
         handleStyle: { color: "#94a3b8" }, showDetail: false }
     ],
     grid: { left: 40, right: 16, top: 12, bottom: 64, containLabel: false },
     xAxis: {
       type: "category",
       data: chartData.map(([name]) => name.length > 20 ? name.slice(0, 18) + "…" : name),
-      axisLabel: { fontSize: 10, color: "#94a3b8", rotate: 35 },
-      axisLine: { lineStyle: { color: "#334155" } },
+      axisLabel: { fontSize: 10, color: colors.subText, rotate: 35 },
+      axisLine: { lineStyle: { color: colors.line } },
       axisTick: { show: false },
     },
     yAxis: {
       type: "value",
-      axisLabel: { fontSize: 10, color: "#94a3b8" },
-      splitLine: { lineStyle: { color: "#1e293b", type: "dashed" } },
+      axisLabel: { fontSize: 10, color: colors.subText },
+      splitLine: { lineStyle: { color: colors.grid, type: "dashed" } },
     },
     series: [{
       type: "bar",
@@ -68,7 +79,7 @@ export function VBarChart({ data, title }: VBarChartProps) {
         position: "top",
         formatter: "{c}",
         fontSize: 10,
-        color: "#e2e8f0",
+        color: colors.label,
         fontWeight: "bold",
       },
       barMaxWidth: 40,

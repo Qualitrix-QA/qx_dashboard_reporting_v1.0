@@ -1,7 +1,7 @@
 /**
- * Module Health Map — Shows module breakdown bar + risk mindmap side by side.
- * Breakdown bar: WHY is a module risky? (composition by severity/result)
- * Mindmap: WHICH modules are riskiest? (ranked overview)
+ * Module Health Map — Shows module breakdown bar + risk visualization side by side.
+ * Left: WHY is a module risky? (composition by severity/result)
+ * Right: WHICH modules are riskiest? — toggled between Sunburst and Treemap views.
  */
 import { useMemo } from "react";
 import { Shield } from "lucide-react";
@@ -12,17 +12,17 @@ import {
   getRiskLevelCounts, RISK_COLORS,
 } from "@/utils/moduleRisk";
 import type { RawRow, DataAnalysis, DynamicAggregations, AISchema } from "@/types/bug";
-
 interface Props {
   rows: RawRow[];
   analysis: DataAnalysis;
   agg: DynamicAggregations;
   aiSchema?: AISchema | null;
+  theme?: "light" | "dark";
 }
 
 const LEVEL_ORDER = ["Critical", "High", "Medium", "Low", "Safe"] as const;
 
-export function ModuleHealthMap({ rows, analysis, agg, aiSchema }: Props) {
+export function ModuleHealthMap({ rows, analysis, agg, aiSchema, theme }: Props) {
   const moduleCol = useMemo(() => detectModuleColumn(analysis, aiSchema), [analysis, aiSchema]);
   const riskInfo = useMemo(() => detectRiskColumn(analysis, aiSchema), [analysis, aiSchema]);
 
@@ -37,6 +37,7 @@ export function ModuleHealthMap({ rows, analysis, agg, aiSchema }: Props) {
 
   return (
     <div className="space-y-4 animate-fade-in" id="module-health-map">
+
       {/* Section header */}
       <div className="flex items-center gap-2.5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-red-500/20 via-yellow-500/20 to-green-500/20 border border-white/5">
@@ -71,10 +72,10 @@ export function ModuleHealthMap({ rows, analysis, agg, aiSchema }: Props) {
         </div>
       </div>
 
-      {/* Charts grid */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Charts vertical stack */}
+      <div className="space-y-4">
 
-        {/* LEFT: Stacked breakdown bar — WHY is each module risky? */}
+        {/* Stacked breakdown bar — WHY is each module risky? */}
         <div className="rounded-xl border bg-card p-4" data-healthmap-card>
           <div className="mb-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -84,37 +85,23 @@ export function ModuleHealthMap({ rows, analysis, agg, aiSchema }: Props) {
               Composition of each module — what's driving the risk score
             </p>
           </div>
-          <ModuleStackedBar modules={modules} />
+          <ModuleStackedBar modules={modules} theme={theme} />
         </div>
 
-        {/* RIGHT: Mindmap — WHICH modules are riskiest (ranked) */}
+        {/* Risk overview with Mindmap (Full Width) */}
         <div className="rounded-xl border bg-card p-4" data-healthmap-card>
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Module Risk Mindmap
-              </h4>
-              <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-                Ranked by risk score · scroll to zoom · drag to pan
-              </p>
-            </div>
+          {/* Card header */}
+          <div className="mb-3">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Risk Mindmap
+            </h4>
+            <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+              Interactive branch tree · click nodes to expand/collapse · hover for details
+            </p>
           </div>
-          {/* 5-state color key */}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
-            {([
-              ["Critical", "#ef4444", "Release-blocking issues"],
-              ["High", "#f97316", "Urgent, high-impact bugs"],
-              ["Medium", "#eab308", "Tracked, moderate impact"],
-              ["Low", "#06b6d4", "Minimal impact"],
-              ["Safe", "#22c55e", "No significant issues"],
-            ] as const).map(([level, color, tip]) => (
-              <div key={level} className="flex items-center gap-1" title={tip}>
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-[10px] text-muted-foreground">{level}</span>
-              </div>
-            ))}
-          </div>
-          <ModuleMindmap modules={modules} />
+
+          {/* Chart render */}
+          <ModuleMindmap modules={modules} theme={theme} />
         </div>
 
       </div>

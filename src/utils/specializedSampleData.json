@@ -1,0 +1,164 @@
+{
+  "teamUtilization": {
+    "teamSize": 8,
+    "avgUtilization": 78,
+    "fullyLoaded": 3,
+    "availableCapacity": 45,
+    "onLeave": 1,
+    "individualUtilization": [
+      { "member": "Sarah Connor", "utilization": 95 },
+      { "member": "John Doe", "utilization": 85 },
+      { "member": "Alice Smith", "utilization": 70 },
+      { "member": "Bob Johnson", "utilization": 60 },
+      { "member": "Charlie Brown", "utilization": 90 },
+      { "member": "Diana Prince", "utilization": 80 },
+      { "member": "Evan Wright", "utilization": 50 },
+      { "member": "Fiona Gallagher", "utilization": 92 }
+    ],
+    "bandwidthSummary": [
+      { "name": "Sarah Connor", "role": "Lead SDET", "alloc": "40h", "avail": "2h" },
+      { "name": "John Doe", "role": "Senior QA", "alloc": "40h", "avail": "6h" },
+      { "name": "Alice Smith", "role": "QA Analyst", "alloc": "35h", "avail": "10h" },
+      { "name": "Bob Johnson", "role": "SDET", "alloc": "40h", "avail": "16h" },
+      { "name": "Charlie Brown", "role": "Manual QA", "alloc": "40h", "avail": "4h" },
+      { "name": "Diana Prince", "role": "QA Engineer", "alloc": "40h", "avail": "8h" },
+      { "name": "Evan Wright", "role": "Intern QA", "alloc": "20h", "avail": "10h" },
+      { "name": "Fiona Gallagher", "role": "Automation Engineer", "alloc": "40h", "avail": "3h" }
+    ]
+  },
+  "prodIssues": {
+    "totalProdIssues": 24,
+    "criticalP1": 4,
+    "resolved": 18,
+    "inProgress": 4,
+    "carryForward": 2,
+    "weeklyTrend": [
+      { "day": "Mon", "newBugs": 3, "resolved": 2 },
+      { "day": "Tue", "newBugs": 5, "resolved": 4 },
+      { "day": "Wed", "newBugs": 2, "resolved": 3 },
+      { "day": "Thu", "newBugs": 6, "resolved": 5 },
+      { "day": "Fri", "newBugs": 4, "resolved": 3 },
+      { "day": "Sat", "newBugs": 1, "resolved": 1 }
+    ],
+    "bugAgeing": [
+      { "age": "< 24 hours", "p1": 2, "p2": 4, "p3": 6, "total": 12 },
+      { "age": "1 - 7 days", "p1": 1, "p2": 3, "p3": 4, "total": 8 },
+      { "age": "> 7 days", "p1": 1, "p2": 1, "p3": 2, "total": 4 }
+    ],
+    "rcaSummary": [
+      { "category": "Code Defect", "count": 12, "percentage": 50 },
+      { "category": "Deployment Config", "count": 6, "percentage": 25 },
+      { "category": "Third Party API", "count": 4, "percentage": 17 },
+      { "category": "Database Timeout", "count": 2, "percentage": 8 }
+    ]
+  },
+  "bugAnalytics": {
+    "totalBugs": 142,
+    "openBugs": 38,
+    "closedBugs": 104,
+    "dde": 88,
+    "avgAge": 9.4,
+    "bugsByProduct": [
+      { "product": "User Auth App", "count": 42 },
+      { "product": "Payment Portal", "count": 28 },
+      { "product": "Search Engine", "count": 35 },
+      { "product": "Analytics SDK", "count": 22 },
+      { "product": "Core Gateway", "count": 15 }
+    ],
+    "bySeverity": [
+      { "name": "Critical", "value": 15 },
+      { "name": "High", "value": 45 },
+      { "name": "Medium", "value": 62 },
+      { "name": "Low", "value": 20 }
+    ],
+    "ddeThisWeek": 88,
+    "targetDde": 90,
+    "agingSummary": [
+      { "age": "< 7 days", "count": 55 },
+      { "age": "7 - 14 days", "count": 42 },
+      { "age": "14 - 30 days", "count": 30 },
+      { "age": "> 30 days", "count": 15 }
+    ]
+  },
+  "testCoverage": {
+    "totalTestCases": 850,
+    "covered": 720,
+    "notCovered": 130,
+    "overallCoverage": 85,
+    "newTcsAdded": 45,
+    "coverageByProduct": [
+      { "product": "User Auth App", "covered": 92, "gap": 8 },
+      { "product": "Payment Portal", "covered": 88, "gap": 12 },
+      { "product": "Search Engine", "covered": 78, "gap": 22 },
+      { "product": "Analytics SDK", "covered": 85, "gap": 15 },
+      { "product": "Core Gateway", "covered": 82, "gap": 18 }
+    ],
+    "coverageByTestType": [
+      { "type": "Functional", "total": 450, "coverage": 90 },
+      { "type": "Integration", "total": 200, "coverage": 82 },
+      { "type": "Regression", "total": 120, "coverage": 88 },
+      { "type": "Security", "total": 80, "coverage": 70 }
+    ]
+  },
+  "manualExecution": {
+    "executed": 310,
+    "passed": 240,
+    "failed": 45,
+    "blocked": 25,
+    "passRate": 77,
+    "executionSplit": [
+      { "name": "Pass", "value": 240 },
+      { "name": "Fail", "value": 45 },
+      { "name": "Blocked", "value": 25 },
+      { "name": "Not Run", "value": 40 }
+    ],
+    "passRateTrend": [
+      { "week": "Wk1", "rate": 72 },
+      { "week": "Wk2", "rate": 75 },
+      { "week": "Wk3", "rate": 70 },
+      { "week": "Wk4", "rate": 81 },
+      { "week": "This Wk", "rate": 77 }
+    ],
+    "insights": {
+      "topFailingModules": [
+        { "module": "Checkout API", "fails": 18 },
+        { "module": "Login OAuth", "fails": 15 },
+        { "module": "Reports Grid", "fails": 12 }
+      ],
+      "blockedBy": [
+        "Database sandbox migration delay",
+        "Stripe sandbox credentials revoked on Tuesday"
+      ],
+      "actionItems": [
+        "Resolve credential issues on Stripe payment sandbox",
+        "Retest checkout API failure points on build #412",
+        "Re-verify Login OAuth flows under latency simulation"
+      ]
+    }
+  },
+  "automationExecution": {
+    "totalAutoTCs": 520,
+    "executed": 480,
+    "passed": 445,
+    "failed": 35,
+    "automationPct": 56,
+    "runHistory": [
+      { "run": "Run 1", "pass": 390, "fail": 50 },
+      { "run": "Run 2", "pass": 410, "fail": 40 },
+      { "run": "Run 3", "pass": 420, "fail": 45 },
+      { "run": "Run 4", "pass": 435, "fail": 30 },
+      { "run": "Run 5", "pass": 445, "fail": 35 }
+    ],
+    "insights": {
+      "stability": { "flaky": 6, "fixed": 3, "new": 2 },
+      "execTime": { "avg": 38, "longest": 72 },
+      "cicdHealth": { "status": "Red", "lastRun": "3 hours ago" },
+      "keyFailures": [
+        { "test": "User Session Timeout verification", "reason": "AssertionError: expected timeout 15m, got immediate logout" },
+        { "test": "PDF Invoice Generation test", "reason": "FileNotFoundError: static resources directory missing on runner" },
+        { "test": "Admin Audit log query latency check", "reason": "TimeoutError: query took 12.4s (threshold 5.0s)" }
+      ],
+      "nextTarget": 65
+    }
+  }
+}

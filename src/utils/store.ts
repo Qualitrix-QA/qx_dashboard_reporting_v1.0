@@ -1,5 +1,5 @@
 import { openDB, type DBSchema } from "idb";
-import type { RawRow, TemplateFingerprint, UserPreferences, GoogleSheetsConfig, DataFormat } from "@/types/bug";
+import type { RawRow, TemplateFingerprint, UserPreferences, GoogleSheetsConfig, JiraConfig, DataFormat } from "@/types/bug";
 
 export type AnalysisRecord = {
   id: string;
@@ -18,7 +18,7 @@ export type ChatEntry = {
 };
 
 interface BugDashDB extends DBSchema {
-  bugs: { key: string; value: { id: string; rows: RawRow[]; fileName: string; timestamp: number; dataFormat?: DataFormat; googleConfig?: GoogleSheetsConfig } };
+  bugs: { key: string; value: { id: string; rows: RawRow[]; fileName: string; timestamp: number; dataFormat?: DataFormat; googleConfig?: GoogleSheetsConfig; jiraConfig?: JiraConfig } };
   templates: { key: string; value: TemplateFingerprint };
   preferences: { key: string; value: UserPreferences };
   history: { key: string; value: AnalysisRecord };
@@ -40,12 +40,12 @@ function getDB() {
   });
 }
 
-export async function saveBugData(rows: RawRow[], fileName: string, dataFormat?: DataFormat, googleConfig?: GoogleSheetsConfig) {
+export async function saveBugData(rows: RawRow[], fileName: string, dataFormat?: DataFormat, googleConfig?: GoogleSheetsConfig, jiraConfig?: JiraConfig) {
   const db = await getDB();
-  await db.put("bugs", { id: "latest", rows, fileName, timestamp: Date.now(), dataFormat, googleConfig }, "latest");
+  await db.put("bugs", { id: "latest", rows, fileName, timestamp: Date.now(), dataFormat, googleConfig, jiraConfig }, "latest");
 }
 
-export async function loadBugData(): Promise<{ rows: RawRow[]; fileName: string; timestamp: number; dataFormat?: DataFormat; googleConfig?: GoogleSheetsConfig } | undefined> {
+export async function loadBugData(): Promise<{ rows: RawRow[]; fileName: string; timestamp: number; dataFormat?: DataFormat; googleConfig?: GoogleSheetsConfig; jiraConfig?: JiraConfig } | undefined> {
   const db = await getDB();
   return db.get("bugs", "latest");
 }

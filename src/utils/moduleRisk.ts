@@ -79,6 +79,29 @@ export function detectModuleColumn(
     })[0].name;
   }
 
+  // Fallback to standard Jira/sheet grouping columns
+  const fallbacks = analysis.columns.filter(c =>
+    c.type === "categorical" &&
+    !INTERNAL_COLUMNS.includes(c.name) &&
+    c.uniqueCount >= 2 &&
+    c.uniqueCount <= 100 &&
+    c.fillRate > 20 &&
+    /\b(project|components|labels|__sheet)\b/i.test(c.name)
+  );
+
+  if (fallbacks.length > 0) {
+    return fallbacks.sort((a, b) => {
+      const getPriority = (name: string) => {
+        const ln = name.toLowerCase();
+        if (ln === "project" || ln === "__sheet") return 4;
+        if (ln === "components") return 3;
+        if (ln === "labels") return 2;
+        return 1;
+      };
+      return getPriority(b.name) - getPriority(a.name);
+    })[0].name;
+  }
+
   return null;
 }
 
@@ -154,47 +177,6 @@ export function detectRiskColumn(
 
 // ─── Risk score calculation ─────────────────────────────────────────────────
 
-// Weight maps for different data types
-const SEVERITY_WEIGHTS: Record<string, number> = {
-  critical: 4, blocker: 4,
-  high: 2,
-  medium: 1, major: 1,
-  low: 0.25, minor: 0.25,
-};
-
-const RESULT_WEIGHTS: Record<string, number> = {
-  fail: 3, failed: 3,
-  blocked: 2, block: 2,
-  "not executed": 1, skipped: 1, "n/a": 1, "not run": 1,
-  pass: 0, passed: 0,
-};
-
-const PRIORITY_WEIGHTS: Record<string, number> = {
-  p1: 3, critical: 3, high: 3, highest: 3,
-  p2: 1.5, medium: 1.5,
-  p3: 0.5, low: 0.5,
-  p4: 0.1, lowest: 0.1,
-};
-
-const STATUS_WEIGHTS: Record<string, number> = {
-  // Bug tracking
-  open: 3, new: 3, "in progress": 2, active: 2, reopened: 3,
-  closed: 0, fixed: 0, resolved: 0, done: 0,
-  // Execution/Test/API
-  error: 3, fail: 3, failed: 3, exception: 3,
-  timeout: 3, blocked: 2,
-  success: 0, passed: 0, pass: 0, ok: 0,
-};
-
-function getWeightMap(riskType: "severity" | "priority" | "result" | "status"): Record<string, number> {
-  switch (riskType) {
-    case "severity": return SEVERITY_WEIGHTS;
-    case "result": return RESULT_WEIGHTS;
-    case "priority": return PRIORITY_WEIGHTS;
-    case "status": return STATUS_WEIGHTS;
-  }
-}
-
 export function getRiskLevel(score: number): ModuleRiskData["riskLevel"] {
   if (score >= 80) return "Critical";
   if (score >= 60) return "High";
@@ -211,6 +193,66 @@ export function getRiskColor(score: number): string {
   return RISK_COLORS.Safe;
 }
 
+// Map cell value to standard severity level based on risk column type
+function mapValueToSeverity(
+  val: string,
+  riskType: "severity" | "priority" | "result" | "status"
+): "Critical" | "High" | "Medium" | "Low" | "Safe" {
+  const s = val.trim().toLowerCase();
+  if (!s) return "Safe";
+
+  if (riskType === "severity") {
+    if (s.includes("critical") || s.includes("blocker")) return "Critical";
+    if (s.includes("high")) return "High";
+    if (s.includes("medium") || s.includes("major")) return "Medium";
+    if (s.includes("low") || s.includes("minor")) return "Low";
+    return "Safe";
+  }
+
+  if (riskType === "priority") {
+    if (s.includes("p1") || s.includes("critical") || s.includes("highest")) return "Critical";
+    if (s.includes("p2") || s.includes("high") || s.includes("medium")) return "High";
+    if (s.includes("p3") || s.includes("low")) return "Medium";
+    if (s.includes("p4") || s.includes("lowest")) return "Low";
+    return "Safe";
+  }
+
+  if (riskType === "result") {
+    if (s.includes("fail") || s.includes("failed")) return "Critical";
+    if (s.includes("blocked") || s.includes("block")) return "High";
+    if (s.includes("not executed") || s.includes("skipped") || s.includes("n/a") || s.includes("not run")) return "Medium";
+    if (s.includes("pass") || s.includes("passed")) return "Safe";
+  }
+
+  if (riskType === "status") {
+    if (s.includes("open") || s.includes("new") || s.includes("reopened") || s.includes("error") || s.includes("exception") || s.includes("timeout")) return "Critical";
+    if (s.includes("in progress") || s.includes("active")) return "High";
+    if (s.includes("closed") || s.includes("fixed") || s.includes("resolved") || s.includes("done") || s.includes("success") || s.includes("passed") || s.includes("pass") || s.includes("ok")) return "Safe";
+  }
+
+  // Heuristic for unstructured free text descriptions (e.g. observations)
+  const FAIL_PHRASES = [
+    "not able", "unable", "not display", "not work", "not function",
+    "not show", "not load", "not save", "not submit", "not allow",
+    "invalid", "incorrect", "error", "exception", "crash", "broken",
+    "wrong", "missing", "issue", "problem", "bug", "defect",
+    "allowing", "allows", "mismatch", "unexpected"
+  ];
+  const PASS_PHRASES = [
+    "working", "as expected", "successfully", "correct", "valid",
+    "pass", "ok ", " ok", "done", "good", "proper", "verified"
+  ];
+
+  if (FAIL_PHRASES.some(p => s.includes(p)) && !PASS_PHRASES.some(p => s.includes(p))) {
+    return "Critical";
+  }
+  if (PASS_PHRASES.some(p => s.includes(p))) {
+    return "Safe";
+  }
+
+  return "Low"; // unrecognized text defaults to Low risk instead of polluting higher states
+}
+
 // ─── Main calculation ───────────────────────────────────────────────────────
 
 export function calculateModuleRisks(
@@ -219,21 +261,16 @@ export function calculateModuleRisks(
   riskCol: string,
   riskType: "severity" | "priority" | "result" | "status"
 ): ModuleRiskData[] {
-  const weights = getWeightMap(riskType);
-
-  // Single-pass: build module → { total, breakdown, rawScore, maxStructuredWeight, maxInferredWeight }
-  // We track structured vs inferred weights separately so floor overrides only apply for
-  // recognized values like "Critical" or "Fail", NOT for vague free-text inferences.
   const moduleData: Record<string, {
     total: number;
     breakdown: Record<string, number>;
-    rawScore: number;
-    maxStructuredWeight: number;  // from recognized values (Critical, Fail, P1, etc.)
-    maxInferredWeight: number;    // from free-text heuristic guesses
+    counts: Record<"Critical" | "High" | "Medium" | "Low" | "Safe", number>;
   }> = {};
+
   const moduleCanonical: Record<string, string> = {};
   const riskCanonical: Record<string, string> = {};
 
+  // Single pass aggregation
   for (const row of rows) {
     const mod = (row[moduleCol] || "").trim();
     const risk = (row[riskCol] || "").trim();
@@ -243,116 +280,62 @@ export function calculateModuleRisks(
     if (!moduleCanonical[modLower]) moduleCanonical[modLower] = mod;
     const canonical = moduleCanonical[modLower];
 
-    if (!moduleData[canonical]) moduleData[canonical] = {
-      total: 0, breakdown: {}, rawScore: 0, maxStructuredWeight: 0, maxInferredWeight: 0,
-    };
-    moduleData[canonical].total++;
+    if (!moduleData[canonical]) {
+      moduleData[canonical] = {
+        total: 0,
+        breakdown: {},
+        counts: { Critical: 0, High: 0, Medium: 0, Low: 0, Safe: 0 },
+      };
+    }
+
+    const data = moduleData[canonical];
+    data.total++;
 
     if (risk) {
       const riskLower = risk.toLowerCase();
       if (!riskCanonical[riskLower]) riskCanonical[riskLower] = risk;
       const canonicalRisk = riskCanonical[riskLower];
 
-      moduleData[canonical].breakdown[canonicalRisk] = (moduleData[canonical].breakdown[canonicalRisk] || 0) + 1;
+      // Track breakdown counts for tooltip representation
+      data.breakdown[canonicalRisk] = (data.breakdown[canonicalRisk] || 0) + 1;
 
-      // Find weight for this value using known patterns
-      let w = 0;
-      let matched = false;
-      for (const [pattern, weight] of Object.entries(weights)) {
-        if (riskLower === pattern || riskLower.includes(pattern)) {
-          w = weight;
-          matched = true;
-          break;
-        }
-      }
-
-      // ── Fallback for free-text QA descriptions ──────────────────────────────
-      // When testers write observations like "User is not able to login" instead
-      // of standard values like "Fail", we infer a LOWER weight so these don't
-      // overwhelm the scoring and make every module look equally risky.
-      if (!matched && riskLower.length > 10) {
-        const FAIL_PHRASES = [
-          "not able", "unable", "not display", "not work", "not function",
-          "not show", "not load", "not save", "not submit", "not allow",
-          "invalid", "incorrect", "error", "exception", "crash", "broken",
-          "wrong", "missing", "issue", "problem", "bug", "defect",
-          "allowing", "allows",
-          "not enter", "not edit", "not update", "not delete", "not access",
-          "not redirect", "mismatch", "unexpected",
-        ];
-        const PASS_PHRASES = [
-          "working", "as expected", "successfully", "correct", "valid",
-          "pass", "ok ", " ok", "done", "good", "proper", "verified",
-          "able to",
-        ];
-
-        const isFailLike = FAIL_PHRASES.some(p => riskLower.includes(p));
-        const isPassLike = PASS_PHRASES.some(p => riskLower.includes(p));
-
-        if (isFailLike && !isPassLike) {
-          // Inferred failure — use a moderate weight but track as inferred
-          w = riskType === "result" ? 1.5 : 0.75;
-        } else if (!isPassLike) {
-          // Unrecognized long text — very small weight
-          w = 0.15;
-        }
-        // If isPassLike → w stays 0
-
-        moduleData[canonical].rawScore += w;
-        moduleData[canonical].maxInferredWeight = Math.max(moduleData[canonical].maxInferredWeight, w);
-      } else {
-        moduleData[canonical].rawScore += w;
-        if (matched) {
-          moduleData[canonical].maxStructuredWeight = Math.max(moduleData[canonical].maxStructuredWeight, w);
-        }
-      }
+      // Classify the value into a standard severity
+      const severity = mapValueToSeverity(risk, riskType);
+      data.counts[severity]++;
+    } else {
+      // Empty value treated as safe/no issues
+      data.counts["Safe"]++;
     }
   }
 
-  // Normalize scores
-  const modules = Object.entries(moduleData);
-  if (modules.length === 0) return [];
+  // Calculate scores and format return objects
+  return Object.entries(moduleData).map(([name, data]) => {
+    const { Critical, High, Medium, Low } = data.counts;
 
-  // For result-based and status-based scoring, divide by total first (rate-based).
-  // Max structured weight for both is 3, so dividing by (total * 3) gives a pure 0-100 scale.
-  if (riskType === "result" || riskType === "status") {
-    for (const [, data] of modules) {
-      if (data.total > 0) {
-        data.rawScore = (data.rawScore / (data.total * 3)) * 100;
-      }
-    }
-  }
+    let finalScore = 5; // Perfect health baseline
 
-  const maxRaw = Math.max(...modules.map(([, d]) => d.rawScore), 0.001);
-
-  return modules.map(([name, data]) => {
-    const normalized = (riskType === "result" || riskType === "status")
-      ? Math.min(data.rawScore, 100)
-      : (data.rawScore / maxRaw) * 100;
-
-    // ── Absolute floor overrides ──
-    // ONLY apply for absolute severity/priority (e.g. 1 Critical bug = floor 80).
-    // Free-text inferred weights are ignored for these floors.
-    let finalScore = Math.round(normalized);
-
-    if (riskType === "severity") {
-      if (data.maxStructuredWeight >= 4 && finalScore < 80) finalScore = 80;
-      else if (data.maxStructuredWeight >= 2 && finalScore < 60) finalScore = 60;
+    // Base score is set by the worst severity, plus small increments for each additional bug
+    if (Critical > 0) {
+      finalScore = 80 + 4 * (Critical - 1) + 2 * High + 1 * Medium + 0.5 * Low;
+      if (finalScore > 100) finalScore = 100;
+    } else if (High > 0) {
+      finalScore = 60 + 3 * (High - 1) + 1 * Medium + 0.5 * Low;
+      if (finalScore > 79) finalScore = 79;
+    } else if (Medium > 0) {
+      finalScore = 40 + 2 * (Medium - 1) + 0.5 * Low;
+      if (finalScore > 59) finalScore = 59;
+    } else if (Low > 0) {
+      finalScore = 20 + 1 * (Low - 1);
+      if (finalScore > 39) finalScore = 39;
     }
 
-    // For rate-driven metrics (results, statuses like Open/Close), we DO NOT
-    // enforce absolute floors. A single "Error" in 500 requests shouldn't make the module High risk.
-
-    if (riskType === "priority") {
-      if (data.maxStructuredWeight >= 3 && finalScore < 80) finalScore = 80;
-      else if (data.maxStructuredWeight >= 1.5 && finalScore < 60) finalScore = 60;
-    }
+    const roundedScore = Math.round(finalScore);
 
     return {
       module: name,
       total: data.total,
-      riskScore: finalScore,
-      riskLevel: getRiskLevel(finalScore),
+      riskScore: roundedScore,
+      riskLevel: getRiskLevel(roundedScore),
       breakdown: data.breakdown,
     };
   }).sort((a, b) => b.riskScore - a.riskScore);
@@ -367,6 +350,7 @@ export function getRiskLevelCounts(modules: ModuleRiskData[]): Record<ModuleRisk
   }
   return counts as Record<ModuleRiskData["riskLevel"], number>;
 }
+
 
 // ─── Build treemap data structure ───────────────────────────────────────────
 
@@ -385,25 +369,3 @@ export function buildTreemapData(modules: ModuleRiskData[]) {
   }));
 }
 
-// ─── Build mindmap data structure ───────────────────────────────────────────
-
-export function buildMindmapData(modules: ModuleRiskData[]) {
-  return {
-    name: "All Modules",
-    itemStyle: { color: "#334155", borderColor: "#475569" },
-    children: modules.map(m => ({
-      name: m.module,
-      value: m.total,
-      riskScore: m.riskScore,
-      riskLevel: m.riskLevel,
-      breakdown: m.breakdown,
-      itemStyle: {
-        color: getRiskColor(m.riskScore),
-        borderColor: "rgba(255,255,255,0.2)",
-        borderWidth: 1,
-      },
-      // Optionally could add severity breakdown as leaves, but keep it clean
-      // by just leaving modules as the leaves, colored by risk.
-    })),
-  };
-}

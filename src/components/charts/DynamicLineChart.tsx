@@ -15,9 +15,10 @@ interface Props {
   rows: RawRow[];
   colName: string;
   title: string;
+  theme?: "light" | "dark";
 }
 
-export function DynamicLineChart({ rows, colName, title }: Props) {
+export function DynamicLineChart({ rows, colName, title, theme }: Props) {
   const { labels, data } = useMemo(() => {
     const dailyCounts: Record<string, number> = {};
 
@@ -55,6 +56,13 @@ export function DynamicLineChart({ rows, colName, title }: Props) {
     };
   }, [rows, colName]);
 
+  const isDark = theme !== "light";
+  const colors = {
+    subText: isDark ? "#94a3b8" : "#64748b",
+    line: isDark ? "#334155" : "#cbd5e1",
+    grid: isDark ? "rgba(255,255,255,0.05)" : "#e2e8f0"
+  };
+
   const option: echarts.EChartsCoreOption = useMemo(() => ({
     tooltip: {
       trigger: "axis",
@@ -68,14 +76,14 @@ export function DynamicLineChart({ rows, colName, title }: Props) {
       type: "category",
       boundaryGap: false,
       data: labels,
-      axisLabel: { fontSize: 10, color: "#94a3b8" },
+      axisLabel: { fontSize: 10, color: colors.subText },
       axisTick: { show: false },
-      axisLine: { lineStyle: { color: "#334155" } },
+      axisLine: { lineStyle: { color: colors.line } },
     },
     yAxis: {
       type: "value",
-      axisLabel: { fontSize: 10, color: "#94a3b8" },
-      splitLine: { lineStyle: { color: "rgba(255,255,255,0.05)" } },
+      axisLabel: { fontSize: 10, color: colors.subText },
+      splitLine: { lineStyle: { color: colors.grid } },
     },
     series: [
       {
@@ -96,7 +104,7 @@ export function DynamicLineChart({ rows, colName, title }: Props) {
         animationEasing: "cubicOut",
       },
     ],
-  }), [labels, data]);
+  }), [labels, data, colors.subText, colors.line, colors.grid]);
 
   if (labels.length === 0) return null;
 

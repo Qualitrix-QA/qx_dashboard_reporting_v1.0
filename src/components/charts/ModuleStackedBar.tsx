@@ -17,6 +17,7 @@ echarts.use([BarChart, TooltipComponent, GridComponent, LegendComponent, DataZoo
 
 interface Props {
   modules: ModuleRiskData[];
+  theme?: "light" | "dark";
 }
 
 /** Map a raw breakdown key to a display color */
@@ -33,7 +34,7 @@ function getValueColor(key: string): string {
   return "#475569";
 }
 
-export function ModuleStackedBar({ modules }: Props) {
+export function ModuleStackedBar({ modules, theme }: Props) {
   const { series, categories, legend } = useMemo(() => {
     // Sort worst modules first (no artificial limits)
     const sorted = [...modules]
@@ -80,6 +81,14 @@ export function ModuleStackedBar({ modules }: Props) {
 
   const chartHeight = Math.max(280, categories.length * 36 + 80);
 
+  const isDark = theme !== "light";
+  const colors = {
+    subText: isDark ? "#94a3b8" : "#64748b",
+    line: isDark ? "rgba(255,255,255,0.06)" : "#e2e8f0",
+    grid: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+    zoomFill: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+  };
+
   const option: echarts.EChartsCoreOption = {
     backgroundColor: "transparent",
     tooltip: {
@@ -120,7 +129,7 @@ export function ModuleStackedBar({ modules }: Props) {
     legend: {
       data: legend,
       bottom: 4,
-      textStyle: { color: "#94a3b8", fontSize: 10 },
+      textStyle: { color: colors.subText, fontSize: 10 },
       itemWidth: 12,
       itemHeight: 8,
       icon: "roundRect",
@@ -129,7 +138,7 @@ export function ModuleStackedBar({ modules }: Props) {
     dataZoom: [
       { type: "inside", yAxisIndex: 0 },
       { type: "slider", show: true, yAxisIndex: 0, right: 0, width: 14, 
-        borderColor: "transparent", fillerColor: "rgba(255,255,255,0.1)", 
+        borderColor: "transparent", fillerColor: colors.zoomFill, 
         handleStyle: { color: "#94a3b8" }, showDetail: false }
     ],
     grid: {
@@ -141,8 +150,8 @@ export function ModuleStackedBar({ modules }: Props) {
     },
     xAxis: {
       type: "value",
-      splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
-      axisLabel: { color: "#64748b", fontSize: 10 },
+      splitLine: { lineStyle: { color: colors.grid } },
+      axisLabel: { color: colors.subText, fontSize: 10 },
       axisLine: { show: false },
     },
     yAxis: {
@@ -150,12 +159,12 @@ export function ModuleStackedBar({ modules }: Props) {
       data: categories,
       inverse: true, // worst on top
       axisLabel: {
-        color: "#94a3b8",
+        color: colors.subText,
         fontSize: 10.5,
         width: 110,
         overflow: "truncate",
       },
-      axisLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
+      axisLine: { lineStyle: { color: colors.line } },
       axisTick: { show: false },
     },
     series,

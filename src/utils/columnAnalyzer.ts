@@ -143,15 +143,26 @@ function generateChartSuggestions(columns: ColumnAnalysis[]): ChartSuggestion[] 
   });
 
   let priority = 100;
+  let pieCount = 0;
 
   for (const col of sorted.slice(0, 6)) {
-    if (col.uniqueCount <= 7) {
-      suggestions.push({ type: "pie", columns: [col.name], title: `${col.name} Distribution`, priority: priority-- });
-    } else if (col.uniqueCount <= 12) {
-      suggestions.push({ type: "vbar", columns: [col.name], title: `${col.name} Breakdown`, priority: priority-- });
+    let type: "pie" | "vbar" | "hbar" = "vbar";
+    if (col.uniqueCount <= 5 && pieCount < 2) {
+      type = "pie";
+      pieCount++;
+    } else if (col.uniqueCount <= 10) {
+      type = "vbar";
     } else {
-      suggestions.push({ type: "hbar", columns: [col.name], title: `Top ${col.name}`, priority: priority-- });
+      type = "hbar";
     }
+
+    const title = type === "pie" 
+      ? `${col.name} Distribution`
+      : type === "vbar"
+      ? `${col.name} Breakdown`
+      : `Top ${col.name}`;
+
+    suggestions.push({ type, columns: [col.name], title, priority: priority-- });
   }
 
   if (sorted.length >= 2) {

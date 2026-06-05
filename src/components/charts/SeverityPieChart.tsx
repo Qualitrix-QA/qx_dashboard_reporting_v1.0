@@ -10,6 +10,7 @@ echarts.use([PieChart, TooltipComponent, LegendComponent, CanvasRenderer]);
 interface SeverityPieChartProps {
   data: Record<string, number>;
   title?: string;
+  theme?: "light" | "dark";
 }
 
 const COLORS = [
@@ -17,11 +18,18 @@ const COLORS = [
   "#eab308", "#ef4444", "#ec4899", "#3b82f6",
 ];
 
-export function SeverityPieChart({ data, title }: SeverityPieChartProps) {
+export function SeverityPieChart({ data, title, theme }: SeverityPieChartProps) {
   const total = Object.values(data).reduce((s, v) => s + v, 0);
   const chartData = Object.entries(data)
     .sort(([, a], [, b]) => b - a)
     .map(([name, value]) => ({ name, value }));
+
+  const isDark = theme !== "light";
+  const colors = {
+    text: isDark ? "#e2e8f0" : "#334155",
+    subText: isDark ? "#94a3b8" : "#475569",
+    line: isDark ? "#475569" : "#cbd5e1"
+  };
 
   const option: echarts.EChartsCoreOption = {
     tooltip: {
@@ -54,7 +62,7 @@ export function SeverityPieChart({ data, title }: SeverityPieChartProps) {
             return `${params.name}\n${params.value}(${params.percent}%)`;
           },
           fontSize: 11,
-          color: "#94a3b8",
+          color: colors.subText,
           lineHeight: 16,
         },
         labelLine: {
@@ -62,7 +70,7 @@ export function SeverityPieChart({ data, title }: SeverityPieChartProps) {
           length: 12,
           length2: 16,
           smooth: true,
-          lineStyle: { color: "#475569", width: 1 },
+          lineStyle: { color: colors.line, width: 1 },
         },
         emphasis: {
           scale: true,

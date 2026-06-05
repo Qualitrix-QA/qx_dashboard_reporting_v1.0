@@ -10,6 +10,7 @@ interface HBarChartProps {
   data: Record<string, number>;
   title: string;
   color?: string;
+  theme?: "light" | "dark";
 }
 
 const BAR_COLORS = [
@@ -17,11 +18,21 @@ const BAR_COLORS = [
   "#eab308", "#ef4444", "#ec4899", "#3b82f6",
 ];
 
-export function HBarChart({ data, title }: HBarChartProps) {
+export function HBarChart({ data, title, theme }: HBarChartProps) {
   const total = Object.values(data).reduce((s, v) => s + v, 0);
   const chartData = Object.entries(data)
     .sort(([, a], [, b]) => b - a)
     .reverse(); // reverse for horizontal so biggest is on top
+
+  const isDark = theme !== "light";
+  const colors = {
+    text: isDark ? "#e2e8f0" : "#475569",
+    subText: isDark ? "#94a3b8" : "#64748b",
+    line: isDark ? "#334155" : "#cbd5e1",
+    grid: isDark ? "#1e293b" : "#f1f5f9",
+    zoomFill: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+    label: isDark ? "#e2e8f0" : "#475569"
+  };
 
   const option: echarts.EChartsCoreOption = {
     tooltip: {
@@ -35,20 +46,20 @@ export function HBarChart({ data, title }: HBarChartProps) {
     dataZoom: [
       { type: "inside", yAxisIndex: 0 },
       { type: "slider", show: true, yAxisIndex: 0, right: 0, width: 16, 
-        borderColor: "transparent", fillerColor: "rgba(255,255,255,0.1)", 
+        borderColor: "transparent", fillerColor: colors.zoomFill, 
         handleStyle: { color: "#94a3b8" }, showDetail: false }
     ],
     grid: { left: 10, right: 36, top: 8, bottom: 8, containLabel: true },
     xAxis: {
       type: "value",
-      axisLabel: { fontSize: 10, color: "#94a3b8" },
-      splitLine: { lineStyle: { color: "#1e293b", type: "dashed" } },
+      axisLabel: { fontSize: 10, color: colors.subText },
+      splitLine: { lineStyle: { color: colors.grid, type: "dashed" } },
     },
     yAxis: {
       type: "category",
       data: chartData.map(([name]) => name.length > 22 ? name.slice(0, 20) + "…" : name),
-      axisLabel: { fontSize: 10, color: "#94a3b8" },
-      axisLine: { lineStyle: { color: "#334155" } },
+      axisLabel: { fontSize: 10, color: colors.subText },
+      axisLine: { lineStyle: { color: colors.line } },
       axisTick: { show: false },
     },
     series: [{
@@ -68,7 +79,7 @@ export function HBarChart({ data, title }: HBarChartProps) {
         position: "right",
         formatter: "{c}",
         fontSize: 10,
-        color: "#e2e8f0",
+        color: colors.label,
         fontWeight: "bold",
       },
       barMaxWidth: 28,

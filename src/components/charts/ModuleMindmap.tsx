@@ -1,9 +1,10 @@
 /**
- * Module Risk Mindmap — ECharts Graph with 3-segment elbow routing.
- * Each branch: straight diagonal → tiny rounded arc at corner → straight horizontal.
- * Roam (scroll-to-zoom + drag) works on the whole chart uniformly.
+ * Module Risk Mindmap — ECharts force-directed graph representation.
+ * Renders a central root node connected to 5 risk tier nodes,
+ * which in turn connect to their corresponding module nodes.
+ * Uses a physics force layout to prevent text/node overlaps and keep it centralised.
  */
-import { useMemo, useRef } from "react";
+import { useMemo, useState, useEffect } from "react";
 import ReactEChartsCore from "echarts-for-react/lib/core";
 import * as echarts from "echarts/core";
 import { GraphChart } from "echarts/charts";
@@ -11,191 +12,325 @@ import { TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { ModuleRiskData } from "@/types/bug";
 import { RISK_COLORS, getRiskColor } from "@/utils/moduleRisk";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 echarts.use([GraphChart, TooltipComponent, CanvasRenderer]);
 
-interface Props { modules: ModuleRiskData[]; }
+interface Props {
+  modules: ModuleRiskData[];
+  theme?: "light" | "dark";
+}
 
-const PILL_BG: Record<string, string> = {
-  Critical: "rgba(239,68,68,0.22)",
-  High:     "rgba(249,115,22,0.18)",
-  Medium:   "rgba(234,179,8,0.16)",
-  Low:      "rgba(6,182,212,0.16)",
-  Safe:     "rgba(34,197,94,0.14)",
-};
+const LEVEL_ORDER = ["Critical", "High", "Medium", "Low", "Safe"] as const;
 
-export function ModuleMindmap({ modules }: Props) {
-  const chartRef = useRef<any>(null);
+export function ModuleMindmap({ modules, theme }: Props) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const option: echarts.EChartsCoreOption = useMemo(() => {
-    const sorted = [...modules].sort((a, b) => b.riskScore - a.riskScore);
-    const half = Math.ceil(sorted.length / 2);
-    const rightSide = sorted.slice(0, half);
-    const leftSide  = sorted.slice(half);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [isFullscreen]);
 
-    const V_SPACING = 54;
-    const H_NODE    = 280;  // x of pill
-    const H_MID     = 140;  // x of elbow
-    // CR is computed per-node based on its angle — zero for nearly-horizontal lines
+  // Clean up fullscreen state when component unmounts
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
 
-    const nodes: any[] = [];
-    const edges: any[] = [];
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+  }, [isFullscreen]);
 
-    // Invisible waypoint helper
-    const mid = (id: string, x: number, y: number) =>
-      nodes.push({ id, x, y, symbolSize: 0, symbol: "circle",
-        itemStyle: { color: "transparent", borderColor: "transparent" },
-        label: { show: false }, _mid: true });
+  const isDark = theme !== "light";
 
-    // Root
-    nodes.push({
-      id: "root", name: "All Modules", x: 0, y: 0,
-      symbolSize: [148, 38], symbol: "roundRect",
-      itemStyle: { color: "#0f172a", borderColor: "rgba(148,163,184,0.5)", borderWidth: 1.5 },
-      label: { show: true, formatter: "⬡  All Modules", color: "#f1f5f9",
-        fontSize: 13, fontWeight: "bold", position: "inside",
-        verticalAlign: "middle", align: "center" },
+  const { nodes, links } = useMemo(() => {
+    // Group modules by risk level
+    const grouped: Record<string, ModuleRiskData[]> = {
+      Critical: [], High: [], Medium: [], Low: [], Safe: [],
+    };
+    for (const m of modules) {
+      grouped[m.riskLevel].push(m);
+    }
+
+    const totalBugs = modules.reduce((sum, m) => sum + m.total, 0);
+
+    const graphNodes: any[] = [];
+    const graphLinks: any[] = [];
+
+    // 1. Add Root Node (fixed in the center)
+    graphNodes.push({
+      id: "root",
+      name: "System Modules",
+      value: totalBugs,
+      isRoot: true,
+      symbolSize: 32,
+      // Fixed position to ensure it stays strictly in the center
+      x: 0,
+      y: 0,
+      fixed: true,
+      itemStyle: {
+        color: isDark ? "#1e293b" : "#e2e8f0",
+        borderColor: isDark ? "#475569" : "#cbd5e1",
+        borderWidth: 3,
+        shadowBlur: 15,
+        shadowColor: isDark ? "#64748b" : "#94a3b8",
+      },
+      label: {
+        show: true,
+        position: "inside",
+        color: isDark ? "#f1f5f9" : "#1e293b",
+        fontSize: 10,
+        fontWeight: "bold",
+        formatter: "{b}",
+      },
     });
 
-    const addSide = (list: ModuleRiskData[], side: "right" | "left") => {
-      const sign = side === "right" ? 1 : -1;
-      const maxY = ((list.length - 1) / 2) * V_SPACING || 1;
+    // 2. Add Risk Tiers and their Modules
+    LEVEL_ORDER.forEach((level, index) => {
+      const levelModules = grouped[level];
+      if (levelModules.length === 0) return;
 
-      list.forEach((m, i) => {
-        const y = (i - (list.length - 1) / 2) * V_SPACING;
-        const nid   = `${side}_${i}`;
-        const preId = `${side}_pre_${i}`;
-        const arcId = `${side}_arc_${i}`;
+      const color = RISK_COLORS[level];
+      const tierId = `tier_${level}`;
+      const levelTotal = levelModules.reduce((s, m) => s + m.total, 0);
 
-        const shortName = m.module.length > 16 ? m.module.slice(0, 15) + "…" : m.module;
-        const rc = RISK_COLORS[m.riskLevel as keyof typeof RISK_COLORS] ?? "#475569";
+      // Pre-calculate starting angle positions for tiers to distribute them evenly around center
+      const angle = (index / LEVEL_ORDER.length) * 2 * Math.PI;
+      const radius = 100;
 
-        // Unit vector along diagonal (root → elbow at H_MID, y)
-        const dist = Math.sqrt(H_MID * H_MID + y * y) || 1;
-        const ux = H_MID / dist;
-        const uy = y / dist;
+      // Add Tier Node
+      graphNodes.push({
+        id: tierId,
+        name: `${level} (${levelModules.length})`,
+        value: levelTotal,
+        isTier: true,
+        levelName: level,
+        symbolSize: 22,
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        itemStyle: {
+          color: color,
+          borderColor: isDark ? "#0f172a" : "#ffffff",
+          borderWidth: 2,
+          shadowBlur: 10,
+          shadowColor: color,
+        },
+        label: {
+          show: true,
+          position: "top",
+          color: color,
+          fontSize: 10,
+          fontWeight: "bold",
+          backgroundColor: isDark ? "rgba(15, 23, 42, 0.75)" : "rgba(255, 255, 255, 0.85)",
+          padding: [2, 4],
+          borderRadius: 4,
+        },
+      });
 
-        // Only round the corner when the turn angle is steep enough to need it.
-        // angle = 0 when node is at center (perfectly horizontal line), increases as node moves away.
-        const angle = Math.abs(Math.atan2(y, H_MID)); // radians, 0 = horizontal
-        const needsCorner = angle > 0.28; // ~16° threshold — below this, line is nearly straight
-        const CR = needsCorner ? Math.min(18, Math.abs(y) * 0.3) : 0;
+      // Link Root -> Tier
+      graphLinks.push({
+        source: "root",
+        target: tierId,
+        lineStyle: {
+          color: color,
+          width: 3,
+          type: "solid",
+          curveness: 0,
+        },
+      });
 
-        // Pull-back point: CR pixels before the elbow
-        const preX = sign * (H_MID - CR * ux);
-        const preY = y - CR * uy;
-        // Post-corner point: CR pixels after the elbow
-        const arcX = sign * (H_MID + CR);
-        const arcY = y;
+      // Add Module Nodes under this Tier
+      levelModules.forEach((m, mIndex) => {
+        const modId = `mod_${m.module}`;
+        
+        // Distribute module nodes slightly further out
+        const modAngle = angle + ((mIndex - (levelModules.length - 1) / 2) * 0.25);
+        const modRadius = 220;
 
-        // Corner curveness: only applied when corner rounding is needed
-        const norm = maxY > 0 ? y / maxY : 0;
-        const curveness = needsCorner
-          ? (side === "right" ? (norm >= 0 ? -0.45 : 0.45) : (norm >= 0 ? 0.45 : -0.45))
-          : 0;
-
-        mid(preId, preX, preY);
-        mid(arcId, arcX, arcY);
-
-        // Pill node
-        nodes.push({
-          id: nid, name: m.module, x: sign * H_NODE, y,
-          riskScore: m.riskScore, riskLevel: m.riskLevel,
-          breakdown: m.breakdown, totalCount: m.total,
-          symbolSize: [148, 32], symbol: "roundRect",
+        graphNodes.push({
+          id: modId,
+          name: m.module,
+          value: m.total,
+          isModule: true,
+          riskScore: m.riskScore,
+          riskLevel: m.riskLevel,
+          breakdown: m.breakdown,
+          symbolSize: Math.min(22, 10 + Math.sqrt(m.total) * 2.5),
+          x: Math.cos(modAngle) * modRadius,
+          y: Math.sin(modAngle) * modRadius,
           itemStyle: {
-            color: PILL_BG[m.riskLevel] ?? "rgba(30,41,59,0.8)",
-            borderColor: rc, borderWidth: 1.5,
+            color: color,
+            borderColor: isDark ? "rgba(255, 255, 255, 0.4)" : "rgba(15, 23, 42, 0.2)",
+            borderWidth: 1.5,
+            shadowBlur: 6,
+            shadowColor: color,
           },
           label: {
             show: true,
-            formatter: side === "right"
-              ? `● ${shortName}  (${m.riskScore})`
-              : `(${m.riskScore})  ${shortName} ●`,
-            color: "#e2e8f0", fontSize: 10.5,
-            position: "inside", verticalAlign: "middle", align: "center",
+            position: "right",
+            color: isDark ? "#e2e8f0" : "#1e293b",
+            fontSize: 9.5,
+            fontWeight: "semibold",
+            backgroundColor: isDark ? "rgba(15, 23, 42, 0.5)" : "rgba(255, 255, 255, 0.8)",
+            padding: [2, 4],
+            borderRadius: 3,
           },
         });
 
-        // Segment 1 — straight diagonal from root → just before elbow
-        edges.push({ source: "root", target: preId,
-          lineStyle: { color: rc, opacity: 0.45, width: 1.5, curveness: 0 } });
-
-        // Segment 2 — tiny rounded arc ONLY at the elbow corner
-        edges.push({ source: preId, target: arcId,
-          lineStyle: { color: rc, opacity: 0.45, width: 1.5, curveness } });
-
-        // Segment 3 — straight horizontal into the pill
-        edges.push({ source: arcId, target: nid,
-          lineStyle: { color: rc, opacity: 0.45, width: 1.5, curveness: 0 } });
+        // Link Tier -> Module
+        graphLinks.push({
+          source: tierId,
+          target: modId,
+          lineStyle: {
+            color: color,
+            width: 1.5,
+            type: "dashed",
+            curveness: 0.1,
+          },
+        });
       });
-    };
+    });
 
-    addSide(rightSide, "right");
-    addSide(leftSide,  "left");
+    return { nodes: graphNodes, links: graphLinks };
+  }, [modules, isDark]);
 
-    return {
-      tooltip: {
-        backgroundColor: "rgba(10,12,20,0.95)",
-        borderColor: "rgba(255,255,255,0.08)",
-        extraCssText: "border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.6);",
-        textStyle: { color: "#e2e8f0", fontSize: 12 },
-        formatter: (params: any) => {
-          const d = params.data;
-          if (params.dataType === "edge" || d._mid) return "";
-          if (d.id === "root") {
-            return `<div style="font-weight:700;font-size:13px;margin-bottom:4px">All Modules</div>
-                    <div style="color:#94a3b8;font-size:11px">${modules.length} modules analyzed</div>`;
-          }
-          const color = getRiskColor(d.riskScore ?? 0);
-          const rows = Object.entries((d.breakdown ?? {}) as Record<string, number>)
-            .sort(([, a], [, b]) => (b as number) - (a as number))
-            .map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:12px">
-              <span style="color:#94a3b8">${k}</span><b>${v}</b></div>`)
-            .join("");
-          return `<div style="min-width:160px">
+  const option: echarts.EChartsCoreOption = useMemo(() => ({
+    backgroundColor: "transparent",
+    tooltip: {
+      trigger: "item",
+      backgroundColor: "rgba(10,12,20,0.95)",
+      borderColor: "rgba(255,255,255,0.08)",
+      extraCssText: "border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.6);z-index:9999;",
+      textStyle: { color: "#e2e8f0", fontSize: 12 },
+      formatter: (params: any) => {
+        if (params.dataType !== "node") return "";
+        const d = params.data;
+        if (d.isRoot) {
+          return `<div style="font-weight:700;font-size:13px;margin-bottom:4px">System Hub</div>
+                  <div style="color:#94a3b8;font-size:11px">Total Bugs: <b>${d.value}</b></div>
+                  <div style="color:#94a3b8;font-size:11px">Total Modules: <b>${modules.length}</b></div>`;
+        }
+        if (d.isTier) {
+          return `<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:${RISK_COLORS[d.levelName]}">${d.levelName} Tier</div>
+                  <div style="color:#94a3b8;font-size:11px">Total Bugs: <b>${d.value}</b></div>`;
+        }
+
+        // Individual Module node
+        const color = getRiskColor(d.riskScore ?? 0);
+        const rows = Object.entries((d.breakdown ?? {}) as Record<string, number>)
+          .sort(([, a], [, b]) => (b as number) - (a as number))
+          .map(([k, v]) => `
+            <div style="display:flex;justify-content:space-between;gap:12px;margin-top:2px">
+              <span style="color:#94a3b8">${k}</span>
+              <b>${v}</b>
+            </div>
+          `)
+          .join("");
+
+        return `
+          <div style="min-width:180px">
             <div style="font-weight:700;font-size:13px;margin-bottom:4px">${d.name}</div>
             <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">
-              Total: <b style="color:#e2e8f0">${d.totalCount}</b>&nbsp;·&nbsp;
+              Bugs: <b style="color:#e2e8f0">${d.value}</b>&nbsp;·&nbsp;
               Risk: <b style="color:${color}">${d.riskLevel} (${d.riskScore}/100)</b>
             </div>
-            <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:5px;font-size:11px">${rows}</div>
-          </div>`;
-        },
+            <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:5px;font-size:11px">
+              ${rows}
+            </div>
+          </div>
+        `;
       },
-      series: [{
-        type: "graph", layout: "none",
-        roam: true, scaleLimit: { min: 0.3, max: 3 },
-        draggable: false,
-        nodes, edges,
+    },
+    series: [
+      {
+        type: "graph",
+        layout: "force",
+        data: nodes,
+        links: links,
+        roam: true, // Zoom and Pan
+        draggable: true, // Drag nodes
+        force: {
+          repulsion: 420,       // Keep nodes pushed apart
+          edgeLength: 95,       // Length of the connection lines
+          gravity: 0.05,        // Light center gravity
+          friction: 0.7,        // Smooth damping
+        },
+        lineStyle: {
+          opacity: 0.6,
+        },
         emphasis: {
           focus: "adjacency",
-          itemStyle: { shadowBlur: 12, shadowColor: "rgba(14,165,233,0.4)" },
+          lineStyle: {
+            width: 4,
+            opacity: 1,
+          },
         },
-        animationDuration: 700, animationEasing: "cubicOut",
-      }],
-    };
-  }, [modules]);
-
-  const handleReset = () => {
-    chartRef.current?.getEchartsInstance?.()?.dispatchAction({ type: "restore" });
-  };
-
-  const chartHeight = Math.max(380, Math.ceil(modules.length / 2) * 54 + 80);
+      },
+    ],
+  }), [nodes, links, modules]);
 
   return (
-    <div className="relative">
-      <div className="absolute top-1 right-1 z-10 flex items-center gap-2">
-        <span className="text-[9px] text-muted-foreground/40 select-none hidden sm:inline">
-          scroll to zoom · drag to pan
-        </span>
-        <button onClick={handleReset}
-          className="text-[9px] px-2 py-0.5 rounded border border-white/10 bg-card/80 text-muted-foreground hover:text-foreground hover:border-white/25 transition-colors">
-          Reset
-        </button>
+    <div
+      className={
+        isFullscreen
+          ? "fixed inset-0 z-[9999] bg-background/98 backdrop-blur-md p-6 flex flex-col"
+          : "w-full relative bg-muted/5 rounded-lg border border-white/5 overflow-hidden"
+      }
+    >
+      {/* Header when fullscreen */}
+      {isFullscreen && (
+        <div className="flex justify-between items-center mb-6 pb-4 border-b border-border/40">
+          <div>
+            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Module Risk Mindmap (Fullscreen Mode)
+            </h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Interactive force-directed graph · drag nodes to manipulate layout · zoom and scroll to explore
+            </p>
+          </div>
+          <button
+            onClick={() => setIsFullscreen(false)}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-all duration-200 shadow-md shadow-destructive/10 hover:shadow-destructive/20 focus:outline-none focus:ring-2 focus:ring-destructive/50"
+          >
+            <Minimize2 className="h-4 w-4" />
+            Exit Fullscreen
+          </button>
+        </div>
+      )}
+
+      {/* Control overlay when inline */}
+      {!isFullscreen && (
+        <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
+          <div className="text-[10px] text-muted-foreground/60 select-none pointer-events-none bg-background/60 backdrop-blur px-2 py-1 rounded border border-white/5">
+            Drag nodes · Zoom/Scroll
+          </div>
+          <button
+            onClick={() => setIsFullscreen(true)}
+            className="flex items-center justify-center p-1.5 rounded-md bg-background/80 hover:bg-accent hover:text-accent-foreground text-muted-foreground border border-white/5 transition-all duration-200 cursor-pointer shadow-sm hover:scale-105"
+            title="View Fullscreen"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      <div className={isFullscreen ? "flex-1 w-full min-h-0 relative" : "relative w-full"}>
+        <ReactEChartsCore
+          echarts={echarts}
+          option={option}
+          style={{ height: isFullscreen ? "100%" : 500, width: "100%" }}
+          notMerge
+          lazyUpdate
+        />
       </div>
-      <ReactEChartsCore ref={chartRef} echarts={echarts} option={option}
-        style={{ height: chartHeight, width: "100%" }} notMerge lazyUpdate />
     </div>
   );
 }

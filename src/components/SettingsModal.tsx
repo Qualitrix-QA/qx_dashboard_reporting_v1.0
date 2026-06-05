@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, X, Eye, EyeOff, Sparkles, ChevronDown, Link2 } from "lucide-react";
+import { Settings, X, Eye, EyeOff, Sparkles, ChevronDown, Link2, Kanban, HelpCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,18 @@ export function SettingsModal({ open, onClose, preferences, onSave }: SettingsMo
   const [showGoogleKey, setShowGoogleKey] = useState(false);
   const [keyError, setKeyError] = useState("");
 
+  // Jira States
+  const [jiraHost, setJiraHost] = useState(preferences.jiraHost || "");
+  const [jiraEmail, setJiraEmail] = useState(preferences.jiraEmail || "");
+  const [jiraApiToken, setJiraApiToken] = useState(preferences.jiraApiToken || "");
+  const [showJiraToken, setShowJiraToken] = useState(false);
+  const [jiraJql, setJiraJql] = useState(preferences.jiraJql || "issuetype = Bug ORDER BY created DESC");
+  const [jiraUseProxy, setJiraUseProxy] = useState(preferences.jiraUseProxy !== false);
+  const [jiraProxyUrl, setJiraProxyUrl] = useState(() => {
+    const pUrl = preferences.jiraProxyUrl || "/api/jira-proxy";
+    return pUrl.includes("allorigins") ? "/api/jira-proxy" : pUrl;
+  });
+
   useEffect(() => {
     setAiEnabled(preferences.aiEnabled);
     setProvider(preferences.aiProvider || "groq");
@@ -31,6 +43,15 @@ export function SettingsModal({ open, onClose, preferences, onSave }: SettingsMo
     if (preferences.groqApiKey && !keys.groq) keys.groq = preferences.groqApiKey;
     setApiKeys(keys);
     setGoogleKey(preferences.googleSheetsApiKey || "");
+
+    // Load Jira prefs
+    setJiraHost(preferences.jiraHost || "");
+    setJiraEmail(preferences.jiraEmail || "");
+    setJiraApiToken(preferences.jiraApiToken || "");
+    setJiraJql(preferences.jiraJql || "issuetype = Bug ORDER BY created DESC");
+    setJiraUseProxy(preferences.jiraUseProxy !== false);
+    const pUrl = preferences.jiraProxyUrl || "/api/jira-proxy";
+    setJiraProxyUrl(pUrl.includes("allorigins") ? "/api/jira-proxy" : pUrl);
   }, [preferences, open]);
 
   if (!open) return null;
@@ -61,6 +82,12 @@ export function SettingsModal({ open, onClose, preferences, onSave }: SettingsMo
       apiKeys,
       groqApiKey: apiKeys.groq,
       googleSheetsApiKey: googleKey || undefined,
+      jiraHost: jiraHost.trim(),
+      jiraEmail: jiraEmail.trim(),
+      jiraApiToken: jiraApiToken.trim(),
+      jiraJql: jiraJql.trim(),
+      jiraUseProxy,
+      jiraProxyUrl: jiraProxyUrl.trim(),
     });
     onClose();
   };
@@ -113,6 +140,93 @@ export function SettingsModal({ open, onClose, preferences, onSave }: SettingsMo
               </a>
               . Enable Google Sheets API.
             </p>
+          </div>
+
+          {/* Jira Integration Defaults */}
+          <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+            <div className="flex items-center gap-2">
+              <Kanban className="h-4 w-4 text-primary" />
+              <Label className="text-sm font-medium text-foreground">Jira Defaults</Label>
+              <span className="text-[10px] text-muted-foreground">(optional)</span>
+            </div>
+            
+            <div className="space-y-2.5 text-xs">
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Jira Host URL</Label>
+                <Input
+                  type="text"
+                  value={jiraHost}
+                  onChange={(e) => setJiraHost(e.target.value)}
+                  placeholder="https://mycompany.atlassian.net"
+                  className="mt-1 h-8 text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Email / Username</Label>
+                <Input
+                  type="text"
+                  value={jiraEmail}
+                  onChange={(e) => setJiraEmail(e.target.value)}
+                  placeholder="user@mycompany.com"
+                  className="mt-1 h-8 text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px] text-muted-foreground">API Token</Label>
+                <div className="relative mt-1">
+                  <Input
+                    type={showJiraToken ? "text" : "password"}
+                    value={jiraApiToken}
+                    onChange={(e) => setJiraApiToken(e.target.value)}
+                    placeholder="ATATT..."
+                    className="h-8 pr-10 font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowJiraToken(!showJiraToken)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showJiraToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-[11px] text-muted-foreground">Default JQL Query</Label>
+                <Input
+                  type="text"
+                  value={jiraJql}
+                  onChange={(e) => setJiraJql(e.target.value)}
+                  placeholder='project = "PROJ" AND issuetype = Bug'
+                  className="mt-1 h-8 text-xs font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-md border bg-card/40 px-2 py-1.5 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <Switch checked={jiraUseProxy} onCheckedChange={setJiraUseProxy} />
+                  <Label className="text-[11px] text-foreground">Use CORS Proxy</Label>
+                </div>
+                <span title="Atlassian Jira Cloud blocks direct CORS requests from client browsers. Using a CORS proxy solves this.">
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </span>
+              </div>
+
+              {jiraUseProxy && (
+                <div>
+                  <Label className="text-[11px] text-muted-foreground">Proxy URL Wrapper</Label>
+                  <Input
+                    type="text"
+                    value={jiraProxyUrl}
+                    onChange={(e) => setJiraProxyUrl(e.target.value)}
+                    placeholder="https://api.allorigins.win/raw?url="
+                    className="mt-1 h-8 text-xs font-mono"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* AI Toggle */}
