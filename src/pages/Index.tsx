@@ -557,6 +557,8 @@ export default function Dashboard() {
     if (!confirmed) return;
     setJiraConfig(null);
     await clearAllData();
+    setDashboardOverrides({});
+    setDashboardNotes({});
     setRows([]);
     setFilteredRows([]);
     setFileName("");
@@ -572,6 +574,8 @@ export default function Dashboard() {
     );
     if (!confirmed) return;
     await clearAllData();
+    setDashboardOverrides({});
+    setDashboardNotes({});
     setRows([]);
     setFilteredRows([]);
     setFileName("");
@@ -588,6 +592,8 @@ export default function Dashboard() {
     if (!confirmed) return;
     setGoogleConfig(null);
     await clearAllData();
+    setDashboardOverrides({});
+    setDashboardNotes({});
     setRows([]);
     setFilteredRows([]);
     setFileName("");

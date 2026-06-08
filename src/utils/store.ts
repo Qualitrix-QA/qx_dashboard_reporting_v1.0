@@ -79,6 +79,13 @@ export async function clearAllData() {
   const db = await getDB();
   await db.clear("bugs");
   await db.clear("templates");
+
+  // Clear localStorage keys for dashboard custom state
+  localStorage.removeItem("qualitylens_dashboard_overrides");
+  localStorage.removeItem("qualitylens_dashboard_notes");
+  localStorage.removeItem("qualitylens_new_initiatives_data");
+  localStorage.removeItem("qualitylens_project_level_dashboard_data");
+  localStorage.removeItem("qualitylens_risk_mitigation_data");
 }
 
 // === Analysis History ===

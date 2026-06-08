@@ -287,6 +287,21 @@ function getWeekRange(allDates: Date[]) {
   return { today, monday, sunday };
 }
 
+export interface CustomKPIDef {
+  id: string;
+  label: string;
+  value: string | number;
+  sub: string;
+  color: string;
+}
+
+export interface CustomChartDef {
+  id: string;
+  title: string;
+  type: "bar" | "line" | "pie";
+  data: { name: string; value: number }[];
+}
+
 // ─── 2. PRODUCTION ISSUES DASHBOARD MAPPER ──────────────────────────────────
 export type ProdIssuesData = {
   isDemo: boolean;
@@ -298,6 +313,10 @@ export type ProdIssuesData = {
   weeklyTrend: { day: string; newBugs: number; resolved: number }[];
   bugAgeing: { age: string; p1: number; p2: number; p3: number; total: number }[];
   rcaSummary: { category: string; count: number; percentage: number }[];
+  hiddenKPIs?: string[];
+  hiddenCharts?: string[];
+  customKPIs?: CustomKPIDef[];
+  customCharts?: CustomChartDef[];
 };
 
 export function getProdIssuesData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): ProdIssuesData {
@@ -478,6 +497,10 @@ export type BugAnalyticsData = {
   ddeThisWeek: number;
   targetDde: number;
   agingSummary: { age: string; count: number }[];
+  hiddenKPIs?: string[];
+  hiddenCharts?: string[];
+  customKPIs?: CustomKPIDef[];
+  customCharts?: CustomChartDef[];
 };
 
 export function getBugAnalyticsData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): BugAnalyticsData {
@@ -659,6 +682,10 @@ export type TestCoverageData = {
   newTcsAdded: number;
   coverageByProduct: { product: string; covered: number; gap: number }[];
   coverageByTestType: { type: string; total: number; coverage: number }[];
+  hiddenKPIs?: string[];
+  hiddenCharts?: string[];
+  customKPIs?: CustomKPIDef[];
+  customCharts?: CustomChartDef[];
 };
 
 export function getTestCoverageData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): TestCoverageData {
@@ -825,6 +852,10 @@ export type ManualExecutionData = {
     blockedBy: string[];
     actionItems: string[];
   };
+  hiddenKPIs?: string[];
+  hiddenCharts?: string[];
+  customKPIs?: CustomKPIDef[];
+  customCharts?: CustomChartDef[];
 };
 
 export function getManualExecutionData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): ManualExecutionData {
@@ -998,6 +1029,10 @@ export type AutomationExecutionData = {
     keyFailures: { test: string; reason: string }[];
     nextTarget: number;
   };
+  hiddenKPIs?: string[];
+  hiddenCharts?: string[];
+  customKPIs?: CustomKPIDef[];
+  customCharts?: CustomChartDef[];
 };
 
 export function getAutomationExecutionData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): AutomationExecutionData {
