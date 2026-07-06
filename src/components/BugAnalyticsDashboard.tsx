@@ -6,9 +6,10 @@ import { BarChart, PieChart } from "echarts/charts";
 import { TooltipComponent, GridComponent, LegendComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { RawRow, DataAnalysis, AISchema } from "@/types/bug";
-import { getBugAnalyticsData, type BugAnalyticsData, type CustomKPIDef, type CustomChartDef } from "@/utils/dashboardMapper";
+import { getBugAnalyticsData, type BugAnalyticsData, type CustomKPIDef, type CustomChartDef, type CustomTableDef } from "@/utils/dashboardMapper";
 import { Button } from "@/components/ui/button";
 import { CustomChartCard } from "./CustomChartCard";
+import { CustomTableCard } from "./CustomTableCard";
 
 echarts.use([BarChart, PieChart, TooltipComponent, GridComponent, LegendComponent, CanvasRenderer]);
 
@@ -212,6 +213,35 @@ export function BugAnalyticsDashboard({ rows, analysis, aiSchema, data: propData
     onUpdateData({ ...data, customCharts: updatedCharts });
   };
 
+  const handleAddCustomTable = () => {
+    if (!onUpdateData) return;
+    const newTables = [...(data.customTables || [])];
+    newTables.push({
+      id: `custom_table_${Date.now()}`,
+      title: "New Custom Table",
+      columns: ["Column 1", "Column 2"],
+      data: [
+        { "Column 1": "Row 1", "Column 2": "Data A" },
+        { "Column 1": "Row 2", "Column 2": "Data B" }
+      ]
+    });
+    onUpdateData({ ...data, customTables: newTables });
+  };
+
+  const handleUpdateCustomTable = (id: string, updatedTable: CustomTableDef) => {
+    if (!onUpdateData) return;
+    const updatedTables = (data.customTables || []).map(table =>
+      table.id === id ? updatedTable : table
+    );
+    onUpdateData({ ...data, customTables: updatedTables });
+  };
+
+  const handleDeleteCustomTable = (id: string) => {
+    if (!onUpdateData) return;
+    const updatedTables = (data.customTables || []).filter(table => table.id !== id);
+    onUpdateData({ ...data, customTables: updatedTables });
+  };
+
   const kpiDefinitions = [
     { label: "Total Bugs", value: data.totalBugs, key: "totalBugs", sub: "All products", color: "border-t-[#1e3a8a] text-[#3b82f6]" },
     { label: "Open", value: data.openBugs, key: "openBugs", sub: "Active defects", color: "border-t-[#ef4444] text-[#ef4444]" },
@@ -226,7 +256,8 @@ export function BugAnalyticsDashboard({ rows, analysis, aiSchema, data: propData
   const chartDefinitions = [
     { id: "bugsByProduct", label: "Bugs by Product/Module Chart" },
     { id: "bySeverity", label: "Severity Distribution Chart" },
-    { id: "agingSummary", label: "Defect Aging & DDE Column" }
+    { id: "ddeSection", label: "DDE Block" },
+    { id: "agingSummary", label: "Defect Aging Summary" }
   ];
 
   const isChartVisible = (chartId: string) => !(data.hiddenCharts || []).includes(chartId);
@@ -460,7 +491,7 @@ export function BugAnalyticsDashboard({ rows, analysis, aiSchema, data: propData
       </div>
 
       {/* Grid Layout: Charts + Right Hand DDE Aging */}
-      {(isChartVisible("bugsByProduct") || isChartVisible("bySeverity") || isChartVisible("agingSummary")) && (
+      {(isChartVisible("bugsByProduct") || isChartVisible("bySeverity") || isChartVisible("ddeSection") || isChartVisible("agingSummary")) && (
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left Column: Bugs by Product */}
           {isChartVisible("bugsByProduct") && (
@@ -624,131 +655,144 @@ export function BugAnalyticsDashboard({ rows, analysis, aiSchema, data: propData
           )}
 
           {/* Right Column: DDE & Defect Aging Panel */}
-          {isChartVisible("agingSummary") && (
+          {(isChartVisible("ddeSection") || isChartVisible("agingSummary")) && (
             <div className="space-y-6">
               {/* DDE Explanation Block */}
-              <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-3 group relative">
-                {isEditable && onUpdateData && (
-                  <button
-                    onClick={() => handleHideChart("agingSummary")}
-                    className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-1.5 bg-muted/90 border border-border text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded shadow transition-all z-10"
-                    title="Hide Section"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                  <Info className="h-4 w-4 text-primary" />
-                  DDE & Defect Aging
-                </h3>
-                <div className="rounded-lg bg-muted/30 p-3 text-xs border border-border/40">
-                  <p className="font-bold text-foreground">Defect Detection Efficiency (DDE)</p>
-                  <code className="block mt-1 p-1 bg-background rounded text-[10px] text-primary/90 font-mono">
-                    DDE = Bugs in QA / (QA + Prod) * 100
-                  </code>
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <span>DDE This Week:</span>
-                    <div className="flex items-center gap-0.5">
-                      {isEditable ? (
-                        <input
-                          type="number"
-                          value={data.ddeThisWeek}
-                          onChange={(e) => {
-                            if (!onUpdateData) return;
-                            const val = Math.max(0, parseInt(e.target.value) || 0);
-                            onUpdateData({ ...data, ddeThisWeek: val });
-                          }}
-                          className="w-12 bg-transparent border-0 text-right font-bold text-foreground text-xs p-0 focus:ring-0 rounded-none border-b border-transparent hover:border-border/50 focus:border-primary/50 cursor-text"
-                        />
-                      ) : (
-                        <span className="font-bold text-foreground text-xs select-all">
-                          {data.ddeThisWeek}
-                        </span>
-                      )}
-                      <span>%</span>
+              {isChartVisible("ddeSection") && (
+                <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-3 group relative">
+                  {isEditable && onUpdateData && (
+                    <button
+                      onClick={() => handleHideChart("ddeSection")}
+                      className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-1.5 bg-muted/90 border border-border text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded shadow transition-all z-10"
+                      title="Hide Section"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <Info className="h-4 w-4 text-primary" />
+                    DDE & Defect Aging
+                  </h3>
+                  <div className="rounded-lg bg-muted/30 p-3 text-xs border border-border/40">
+                    <p className="font-bold text-foreground">Defect Detection Efficiency (DDE)</p>
+                    <code className="block mt-1 p-1 bg-background rounded text-[10px] text-primary/90 font-mono">
+                      DDE = Bugs in QA / (QA + Prod) * 100
+                    </code>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <span>DDE This Week:</span>
+                      <div className="flex items-center gap-0.5">
+                        {isEditable ? (
+                          <input
+                            type="number"
+                            value={data.ddeThisWeek}
+                            onChange={(e) => {
+                              if (!onUpdateData) return;
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              onUpdateData({ ...data, ddeThisWeek: val });
+                            }}
+                            className="w-12 bg-transparent border-0 text-right font-bold text-foreground text-xs p-0 focus:ring-0 rounded-none border-b border-transparent hover:border-border/50 focus:border-primary/50 cursor-text"
+                          />
+                        ) : (
+                          <span className="font-bold text-foreground text-xs select-all">
+                            {data.ddeThisWeek}
+                          </span>
+                        )}
+                        <span>%</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <span>Target:</span>
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-muted-foreground font-medium mr-1">&gt;=</span>
-                      {isEditable ? (
-                        <input
-                          type="number"
-                          value={data.targetDde}
-                          onChange={(e) => {
-                            if (!onUpdateData) return;
-                            const val = Math.max(0, parseInt(e.target.value) || 0);
-                            onUpdateData({ ...data, targetDde: val });
-                          }}
-                          className="w-12 bg-transparent border-0 text-right font-medium text-foreground text-xs p-0 focus:ring-0 rounded-none border-b border-transparent hover:border-border/50 focus:border-primary/50 cursor-text"
-                        />
-                      ) : (
-                        <span className="font-medium text-foreground text-xs select-all">
-                          {data.targetDde}
-                        </span>
-                      )}
-                      <span>%</span>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span>Target:</span>
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-muted-foreground font-medium mr-1">&gt;=</span>
+                        {isEditable ? (
+                          <input
+                            type="number"
+                            value={data.targetDde}
+                            onChange={(e) => {
+                              if (!onUpdateData) return;
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              onUpdateData({ ...data, targetDde: val });
+                            }}
+                            className="w-12 bg-transparent border-0 text-right font-medium text-foreground text-xs p-0 focus:ring-0 rounded-none border-b border-transparent hover:border-border/50 focus:border-primary/50 cursor-text"
+                          />
+                        ) : (
+                          <span className="font-medium text-foreground text-xs select-all">
+                            {data.targetDde}
+                          </span>
+                        )}
+                        <span>%</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden mt-2">
-                    <div
-                      className={`h-full rounded-full ${data.ddeThisWeek >= data.targetDde ? "bg-green-500" : "bg-cyan-500"}`}
-                      style={{ width: `${data.ddeThisWeek}%` }}
-                    />
+                    <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden mt-2">
+                      <div
+                        className={`h-full rounded-full ${data.ddeThisWeek >= data.targetDde ? "bg-green-500" : "bg-cyan-500"}`}
+                        style={{ width: `${data.ddeThisWeek}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Aging Summary Table */}
-              <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                <h4 className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wider text-muted-foreground">Defect Aging Summary</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th className="p-2.5 font-semibold text-muted-foreground">Age Bucket</th>
-                        <th className="p-2.5 font-semibold text-muted-foreground text-center">Count</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.agingSummary.length > 0 ? (
-                        data.agingSummary.map((row, idx) => (
-                          <tr key={idx} className="border-b border-border/50 hover:bg-muted/10">
-                            <td className="p-2.5 font-medium text-foreground">{row.age}</td>
-                            <td className="p-2.5 text-center">
-                              {isEditable ? (
-                                <input
-                                  type="number"
-                                  value={row.count}
-                                  onChange={(e) => {
-                                    if (!onUpdateData) return;
-                                    const val = Math.max(0, parseInt(e.target.value) || 0);
-                                    const copy = [...data.agingSummary];
-                                    copy[idx] = { ...copy[idx], count: val };
-                                    onUpdateData({ ...data, agingSummary: copy });
-                                  }}
-                                  className="w-16 bg-transparent border-0 text-center font-semibold focus:ring-0 p-0 shadow-none text-xs text-foreground rounded-none focus:border-b focus:border-primary/45 hover:border-b hover:border-primary/20 cursor-text"
-                                />
-                              ) : (
-                                <span className="text-center text-xs font-semibold text-foreground select-all w-16 block mx-auto">
-                                  {row.count === 0 ? "-" : row.count}
-                                </span>
-                              )}
+              {isChartVisible("agingSummary") && (
+                <div className="rounded-xl border border-border bg-card p-5 shadow-sm group relative">
+                  {isEditable && onUpdateData && (
+                    <button
+                      onClick={() => handleHideChart("agingSummary")}
+                      className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-1.5 bg-muted/90 border border-border text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded shadow transition-all z-10"
+                      title="Hide Section"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <h4 className="mb-2 text-xs font-semibold text-foreground uppercase tracking-wider text-muted-foreground">Defect Aging Summary</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th className="p-2.5 font-semibold text-muted-foreground">Age Bucket</th>
+                          <th className="p-2.5 font-semibold text-muted-foreground text-center">Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.agingSummary.length > 0 ? (
+                          data.agingSummary.map((row, idx) => (
+                            <tr key={idx} className="border-b border-border/50 hover:bg-muted/10">
+                              <td className="p-2.5 font-medium text-foreground">{row.age}</td>
+                              <td className="p-2.5 text-center">
+                                {isEditable ? (
+                                  <input
+                                    type="number"
+                                    value={row.count}
+                                    onChange={(e) => {
+                                      if (!onUpdateData) return;
+                                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                                      const copy = [...data.agingSummary];
+                                      copy[idx] = { ...copy[idx], count: val };
+                                      onUpdateData({ ...data, agingSummary: copy });
+                                    }}
+                                    className="w-16 bg-transparent border-0 text-center font-semibold focus:ring-0 p-0 shadow-none text-xs text-foreground rounded-none focus:border-b focus:border-primary/45 hover:border-b hover:border-primary/20 cursor-text"
+                                  />
+                                ) : (
+                                  <span className="text-center text-xs font-semibold text-foreground select-all w-16 block mx-auto">
+                                    {row.count === 0 ? "-" : row.count}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={2} className="p-6 text-center text-muted-foreground italic">
+                              No defect aging data available
                             </td>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={2} className="p-6 text-center text-muted-foreground italic">
-                            No defect aging data available
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -774,8 +818,8 @@ export function BugAnalyticsDashboard({ rows, analysis, aiSchema, data: propData
         </div>
       )}
 
-      {/* Custom Charts Grid */}
-      {((data.customCharts && data.customCharts.length > 0) || (isEditable && onUpdateData)) && (
+      {/* Custom Charts & Tables Grid */}
+      {((data.customCharts && data.customCharts.length > 0) || (data.customTables && data.customTables.length > 0) || (isEditable && onUpdateData)) && (
         <div className="border-t border-border/60 pt-6 mt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -783,18 +827,28 @@ export function BugAnalyticsDashboard({ rows, analysis, aiSchema, data: propData
               Custom Insights & Charts
             </h3>
             {isEditable && onUpdateData && (
-              <Button
-                onClick={handleAddCustomChart}
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs gap-1.5 border-dashed"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Custom Chart
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleAddCustomChart}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5 border-dashed"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Custom Chart
+                </Button>
+                <Button
+                  onClick={handleAddCustomTable}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5 border-dashed"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Custom Table
+                </Button>
+              </div>
             )}
           </div>
           
-          {data.customCharts && data.customCharts.length > 0 ? (
+          {data.customCharts && data.customCharts.length > 0 && (
             <div className="grid gap-6 md:grid-cols-2">
               {data.customCharts.map((chart) => (
                 <CustomChartCard
@@ -807,20 +861,44 @@ export function BugAnalyticsDashboard({ rows, analysis, aiSchema, data: propData
                 />
               ))}
             </div>
-          ) : (
-            isEditable && onUpdateData && (
-              <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-border/60 rounded-xl bg-muted/5">
-                <p className="text-xs text-muted-foreground mb-2">No custom charts added yet</p>
+          )}
+
+          {data.customTables && data.customTables.length > 0 && (
+            <div className="grid gap-6 md:grid-cols-2 mt-6">
+              {data.customTables.map((table) => (
+                <CustomTableCard
+                  key={table.id}
+                  table={table}
+                  isEditable={isEditable}
+                  onUpdate={(updatedTable) => handleUpdateCustomTable(table.id, updatedTable)}
+                  onDelete={() => handleDeleteCustomTable(table.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {(!data.customCharts || data.customCharts.length === 0) && (!data.customTables || data.customTables.length === 0) && isEditable && onUpdateData && (
+            <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-border/60 rounded-xl bg-muted/5">
+              <p className="text-xs text-muted-foreground mb-2">No custom charts or tables added yet</p>
+              <div className="flex gap-2">
                 <Button
                   onClick={handleAddCustomChart}
                   size="sm"
                   variant="outline"
                   className="text-xs gap-1"
                 >
-                  <Plus className="h-3 w-3" /> Create Your First Custom Chart
+                  <Plus className="h-3 w-3" /> Add Chart
+                </Button>
+                <Button
+                  onClick={handleAddCustomTable}
+                  size="sm"
+                  variant="outline"
+                  className="text-xs gap-1"
+                >
+                  <Plus className="h-3 w-3" /> Add Table
                 </Button>
               </div>
-            )
+            </div>
           )}
         </div>
       )}
