@@ -187,11 +187,15 @@ export function TestCoverageDashboard({ rows, analysis, aiSchema, data: propData
     newTables.push({
       id: `custom_table_${Date.now()}`,
       title: "New Custom Table",
-      columns: ["Column 1", "Column 2"],
+      columns: ["Category", "Value"],
       data: [
-        { "Column 1": "Row 1", "Column 2": "Data A" },
-        { "Column 1": "Row 2", "Column 2": "Data B" }
-      ]
+        { "Category": "Category A", "Value": 10 },
+        { "Category": "Category B", "Value": 20 }
+      ],
+      chartType: "bar",
+      xAxisKey: "Category",
+      yAxisKey: "Value",
+      showChart: false
     });
     onUpdateData({ ...data, customTables: newTables });
   };
@@ -780,6 +784,7 @@ export function TestCoverageDashboard({ rows, analysis, aiSchema, data: propData
                   key={table.id}
                   table={table}
                   isEditable={isEditable}
+                  theme={theme}
                   onUpdate={(updatedTable) => handleUpdateCustomTable(table.id, updatedTable)}
                   onDelete={() => handleDeleteCustomTable(table.id)}
                 />

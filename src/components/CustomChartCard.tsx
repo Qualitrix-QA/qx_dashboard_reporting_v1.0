@@ -7,6 +7,7 @@ import { CanvasRenderer } from "echarts/renderers";
 import { Trash2, Plus, X, BarChart3, LineChart as LineIcon, PieChart as PieIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { CustomChartDef } from "@/utils/dashboardMapper";
 
 echarts.use([BarChart, LineChart, PieChart, TooltipComponent, GridComponent, LegendComponent, CanvasRenderer]);
@@ -216,121 +217,134 @@ export function CustomChartCard({ chart, isEditable, theme, onUpdate, onDelete }
     );
   }
 
+  const handleSave = () => {
+    toast.success("Chart saved!", { description: `"${chart.title}" has been saved successfully.` });
+  };
+
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-md relative animate-fade-in hover:shadow-lg transition-shadow">
-      {/* Absolute delete button for entire chart card */}
-      <button
-        onClick={onDelete}
-        className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg border border-border shadow-sm bg-background/50 hover:bg-background transition-all z-10"
-        title="Delete Custom Chart"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+    <div className="rounded-xl border border-border bg-card shadow-md animate-fade-in hover:shadow-lg transition-shadow overflow-hidden">
+      <div className="p-5 relative">
+        {/* Absolute delete button for entire chart card */}
+        <button
+          onClick={onDelete}
+          className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg border border-border shadow-sm bg-background/50 hover:bg-background transition-all z-10"
+          title="Delete Custom Chart"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Left column: Controls */}
-        <div className="space-y-4">
-          <div>
-            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Chart Title</label>
-            <Input
-              value={chart.title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="e.g. Incident RCA Breakdown"
-              className="h-8 text-xs font-semibold"
-            />
-          </div>
-
-          <div>
-            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Chart Type</label>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={chart.type === "bar" ? "default" : "outline"}
-                className="h-8 text-xs flex-1 gap-1"
-                onClick={() => handleTypeChange("bar")}
-              >
-                <BarChart3 className="h-3.5 w-3.5" /> Bar
-              </Button>
-              <Button
-                size="sm"
-                variant={chart.type === "line" ? "default" : "outline"}
-                className="h-8 text-xs flex-1 gap-1"
-                onClick={() => handleTypeChange("line")}
-              >
-                <LineIcon className="h-3.5 w-3.5" /> Line
-              </Button>
-              <Button
-                size="sm"
-                variant={chart.type === "pie" ? "default" : "outline"}
-                className="h-8 text-xs flex-1 gap-1"
-                onClick={() => handleTypeChange("pie")}
-              >
-                <PieIcon className="h-3.5 w-3.5" /> Pie
-              </Button>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Data Entries</label>
-              <button
-                onClick={handleAddRow}
-                className="text-[10px] font-semibold text-primary hover:text-primary/80 flex items-center gap-0.5"
-              >
-                <Plus className="h-3 w-3" /> Add Category
-              </button>
-            </div>
-
-            <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2 border rounded-md p-2 bg-muted/20">
-              {chart.data.map((row, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <Input
-                    value={row.name}
-                    onChange={(e) => handleDataChange(idx, "name", e.target.value)}
-                    placeholder="Category Name"
-                    className="h-7 text-xs flex-1"
-                  />
-                  <Input
-                    type="number"
-                    value={row.value}
-                    onChange={(e) => handleDataChange(idx, "value", e.target.value)}
-                    placeholder="Value"
-                    className="h-7 text-xs w-20 text-right"
-                  />
-                  <button
-                    onClick={() => handleRemoveRow(idx)}
-                    disabled={chart.data.length <= 1}
-                    className="p-1 text-muted-foreground hover:text-destructive hover:bg-muted disabled:opacity-30 rounded transition-all"
-                    title="Remove Data Point"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right column: live preview chart */}
-        <div className="border border-border/80 rounded-xl bg-card/50 p-3 flex flex-col justify-between h-full min-h-[280px]">
-          <div className="flex justify-between items-center px-1 border-b border-border/40 pb-2">
-            <span className="text-[10px] font-bold text-primary uppercase tracking-widest flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Live Preview
-            </span>
-            <span className="text-[10px] text-muted-foreground">Total: {total}</span>
-          </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-full">
-              <ReactEChartsCore
-                echarts={echarts}
-                option={option}
-                style={{ height: 220 }}
-                notMerge
-                lazyUpdate
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* Left column: Controls */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Chart Title</label>
+              <Input
+                value={chart.title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                placeholder="e.g. Incident RCA Breakdown"
+                className="h-8 text-xs font-semibold"
               />
             </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Chart Type</label>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={chart.type === "bar" ? "default" : "outline"}
+                  className="h-8 text-xs flex-1 gap-1"
+                  onClick={() => handleTypeChange("bar")}
+                >
+                  <BarChart3 className="h-3.5 w-3.5" /> Bar
+                </Button>
+                <Button
+                  size="sm"
+                  variant={chart.type === "line" ? "default" : "outline"}
+                  className="h-8 text-xs flex-1 gap-1"
+                  onClick={() => handleTypeChange("line")}
+                >
+                  <LineIcon className="h-3.5 w-3.5" /> Line
+                </Button>
+                <Button
+                  size="sm"
+                  variant={chart.type === "pie" ? "default" : "outline"}
+                  className="h-8 text-xs flex-1 gap-1"
+                  onClick={() => handleTypeChange("pie")}
+                >
+                  <PieIcon className="h-3.5 w-3.5" /> Pie
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Data Entries</label>
+                <button
+                  onClick={handleAddRow}
+                  className="text-[10px] font-semibold text-primary hover:text-primary/80 flex items-center gap-0.5"
+                >
+                  <Plus className="h-3 w-3" /> Add Category
+                </button>
+              </div>
+
+              <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2 border rounded-md p-2 bg-muted/20">
+                {chart.data.map((row, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <Input
+                      value={row.name}
+                      onChange={(e) => handleDataChange(idx, "name", e.target.value)}
+                      placeholder="Category Name"
+                      className="h-7 text-xs flex-1"
+                    />
+                    <Input
+                      type="number"
+                      value={row.value}
+                      onChange={(e) => handleDataChange(idx, "value", e.target.value)}
+                      placeholder="Value"
+                      className="h-7 text-xs w-20 text-right"
+                    />
+                    <button
+                      onClick={() => handleRemoveRow(idx)}
+                      disabled={chart.data.length <= 1}
+                      className="p-1 text-muted-foreground hover:text-destructive hover:bg-muted disabled:opacity-30 rounded transition-all"
+                      title="Remove Data Point"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right column: live preview chart */}
+          <div className="border border-border/80 rounded-xl bg-card/50 p-3 flex flex-col justify-between h-full min-h-[280px]">
+            <div className="flex justify-between items-center px-1 border-b border-border/40 pb-2">
+              <span className="text-[10px] font-bold text-primary uppercase tracking-widest flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Live Preview
+              </span>
+              <span className="text-[10px] text-muted-foreground">Total: {total}</span>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <div className="w-full">
+                <ReactEChartsCore
+                  echarts={echarts}
+                  option={option}
+                  style={{ height: 220 }}
+                  notMerge
+                  lazyUpdate
+                />
+              </div>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Footer: Save Chart button */}
+      <div className="border-t border-border px-5 py-3 flex justify-end bg-muted/10">
+        <Button onClick={handleSave} className="h-9 px-6 text-sm font-semibold gap-2">
+          Save Chart
+        </Button>
       </div>
     </div>
   );

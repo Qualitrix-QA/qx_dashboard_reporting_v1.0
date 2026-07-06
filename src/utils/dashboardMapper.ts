@@ -307,6 +307,10 @@ export interface CustomTableDef {
   title: string;
   columns: string[];
   data: Record<string, string | number>[];
+  chartType?: "bar" | "line" | "pie";
+  xAxisKey?: string;
+  yAxisKey?: string;
+  showChart?: boolean;
 }
 
 // ─── 2. PRODUCTION ISSUES DASHBOARD MAPPER ──────────────────────────────────
@@ -866,6 +870,7 @@ export type ManualExecutionData = {
   hiddenCharts?: string[];
   customKPIs?: CustomKPIDef[];
   customCharts?: CustomChartDef[];
+  customTables?: CustomTableDef[];
 };
 
 export function getManualExecutionData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): ManualExecutionData {
@@ -1043,6 +1048,7 @@ export type AutomationExecutionData = {
   hiddenCharts?: string[];
   customKPIs?: CustomKPIDef[];
   customCharts?: CustomChartDef[];
+  customTables?: CustomTableDef[];
 };
 
 export function getAutomationExecutionData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): AutomationExecutionData {
