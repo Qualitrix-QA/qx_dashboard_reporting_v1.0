@@ -6,9 +6,10 @@ import { PieChart, LineChart } from "echarts/charts";
 import { TooltipComponent, GridComponent, LegendComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { RawRow, DataAnalysis, AISchema } from "@/types/bug";
-import { getManualExecutionData, type ManualExecutionData, type CustomKPIDef, type CustomChartDef } from "@/utils/dashboardMapper";
+import { getManualExecutionData, type ManualExecutionData, type CustomKPIDef, type CustomChartDef, type CustomTableDef } from "@/utils/dashboardMapper";
 import { Button } from "@/components/ui/button";
 import { CustomChartCard } from "./CustomChartCard";
+import { CustomTableCard } from "./CustomTableCard";
 
 echarts.use([PieChart, LineChart, TooltipComponent, GridComponent, LegendComponent, CanvasRenderer]);
 
@@ -163,7 +164,7 @@ export function ManualExecutionDashboard({ rows, analysis, aiSchema, data: propD
       id: `custom_kpi_${Date.now()}`,
       label: "Custom Metric",
       value: "0",
-      sub: "Description",
+      sub: "",
       color: "border-t-[#3b82f6] text-[#3b82f6]"
     });
     onUpdateData({ ...data, customKPIs: newKpis });
@@ -211,6 +212,39 @@ export function ManualExecutionDashboard({ rows, analysis, aiSchema, data: propD
     if (!onUpdateData) return;
     const updatedCharts = (data.customCharts || []).filter(chart => chart.id !== id);
     onUpdateData({ ...data, customCharts: updatedCharts });
+  };
+
+  const handleAddCustomTable = () => {
+    if (!onUpdateData) return;
+    const newTables = [...(data.customTables || [])];
+    newTables.push({
+      id: `custom_table_${Date.now()}`,
+      title: "New Custom Table",
+      columns: ["Category", "Value"],
+      data: [
+        { "Category": "Category A", "Value": 10 },
+        { "Category": "Category B", "Value": 20 }
+      ],
+      chartType: "bar",
+      xAxisKey: "Category",
+      yAxisKey: "Value",
+      showChart: false
+    });
+    onUpdateData({ ...data, customTables: newTables });
+  };
+
+  const handleUpdateCustomTable = (id: string, updatedTable: CustomTableDef) => {
+    if (!onUpdateData) return;
+    const updatedTables = (data.customTables || []).map(table =>
+      table.id === id ? updatedTable : table
+    );
+    onUpdateData({ ...data, customTables: updatedTables });
+  };
+
+  const handleDeleteCustomTable = (id: string) => {
+    if (!onUpdateData) return;
+    const updatedTables = (data.customTables || []).filter(table => table.id !== id);
+    onUpdateData({ ...data, customTables: updatedTables });
   };
 
   const kpiDefinitions = [
@@ -387,7 +421,18 @@ export function ManualExecutionDashboard({ rows, analysis, aiSchema, data: propD
                   <input
                     type="text"
                     value={kpi.value}
-                    onChange={(e) => handleUpdateCustomKPI(kpi.id, { value: e.target.value })}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const updated = kpi.value === "0" && raw.length > 1 && raw.startsWith("0")
+                        ? raw.slice(1)
+                        : raw;
+                      handleUpdateCustomKPI(kpi.id, { value: updated });
+                    }}
+                    onBlur={() => {
+                      if (kpi.value === "" || kpi.value === null || kpi.value === undefined) {
+                        handleUpdateCustomKPI(kpi.id, { value: "0" });
+                      }
+                    }}
                     placeholder="Value"
                     className={`w-full bg-transparent border-0 border-b border-border/40 text-center text-2xl font-extrabold focus:ring-0 p-0 hover:border-border cursor-text focus:border-primary ${kpi.color.split(" ")[1] || "text-primary"}`}
                   />
@@ -423,7 +468,7 @@ export function ManualExecutionDashboard({ rows, analysis, aiSchema, data: propD
                   <div className={`mt-2 text-3xl font-extrabold tracking-tight select-all ${kpi.color.split(" ")[1] || "text-primary"}`}>
                     {kpi.value}
                   </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{kpi.sub}</p>
+                  {kpi.sub && <p className="mt-1 text-[10px] text-muted-foreground">{kpi.sub}</p>}
                 </>
               )}
             </div>
@@ -894,8 +939,8 @@ export function ManualExecutionDashboard({ rows, analysis, aiSchema, data: propD
         </div>
       )}
 
-      {/* Custom Charts Grid */}
-      {((data.customCharts && data.customCharts.length > 0) || (isEditable && onUpdateData)) && (
+      {/* Custom Charts & Tables Grid */}
+      {((data.customCharts && data.customCharts.length > 0) || (data.customTables && data.customTables.length > 0) || (isEditable && onUpdateData)) && (
         <div className="border-t border-border/60 pt-6 mt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -903,18 +948,28 @@ export function ManualExecutionDashboard({ rows, analysis, aiSchema, data: propD
               Custom Insights & Charts
             </h3>
             {isEditable && onUpdateData && (
-              <Button
-                onClick={handleAddCustomChart}
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs gap-1.5 border-dashed"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Custom Chart
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleAddCustomChart}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5 border-dashed"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Custom Chart
+                </Button>
+                <Button
+                  onClick={handleAddCustomTable}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5 border-dashed"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Custom Table
+                </Button>
+              </div>
             )}
           </div>
           
-          {data.customCharts && data.customCharts.length > 0 ? (
+          {data.customCharts && data.customCharts.length > 0 && (
             <div className="grid gap-6 md:grid-cols-2">
               {data.customCharts.map((chart) => (
                 <CustomChartCard
@@ -927,20 +982,45 @@ export function ManualExecutionDashboard({ rows, analysis, aiSchema, data: propD
                 />
               ))}
             </div>
-          ) : (
-            isEditable && onUpdateData && (
-              <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-border/60 rounded-xl bg-muted/5">
-                <p className="text-xs text-muted-foreground mb-2">No custom charts added yet</p>
+          )}
+
+          {data.customTables && data.customTables.length > 0 && (
+            <div className="grid gap-6 md:grid-cols-2 mt-6">
+              {data.customTables.map((table) => (
+                <CustomTableCard
+                  key={table.id}
+                  table={table}
+                  isEditable={isEditable}
+                  theme={theme}
+                  onUpdate={(updatedTable) => handleUpdateCustomTable(table.id, updatedTable)}
+                  onDelete={() => handleDeleteCustomTable(table.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {(!data.customCharts || data.customCharts.length === 0) && (!data.customTables || data.customTables.length === 0) && isEditable && onUpdateData && (
+            <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-border/60 rounded-xl bg-muted/5">
+              <p className="text-xs text-muted-foreground mb-2">No custom charts or tables added yet</p>
+              <div className="flex gap-2">
                 <Button
                   onClick={handleAddCustomChart}
                   size="sm"
                   variant="outline"
                   className="text-xs gap-1"
                 >
-                  <Plus className="h-3 w-3" /> Create Your First Custom Chart
+                  <Plus className="h-3 w-3" /> Add Chart
+                </Button>
+                <Button
+                  onClick={handleAddCustomTable}
+                  size="sm"
+                  variant="outline"
+                  className="text-xs gap-1"
+                >
+                  <Plus className="h-3 w-3" /> Add Table
                 </Button>
               </div>
-            )
+            </div>
           )}
         </div>
       )}

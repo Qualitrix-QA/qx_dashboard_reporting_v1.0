@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Download, FileText, Loader2 } from "lucide-react";
-import { exportCSV, exportPDF, exportLandscapePDF } from "@/utils/exportUtils";
+import { exportCSV, exportLandscapePDF } from "@/utils/exportUtils";
 import type { RawRow, DataAnalysis, DynamicAggregations, AISchema } from "@/types/bug";
 
 interface ExportBarProps {
@@ -32,7 +32,6 @@ export function ExportBar({
   globalEditMode,
   setGlobalEditMode,
 }: ExportBarProps) {
-  const [pdfLoading, setPdfLoading] = useState(false);
   const [landscapePdfLoading, setLandscapePdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
 
@@ -43,53 +42,6 @@ export function ExportBar({
 
   const handleCSV = () => {
     exportCSV(bugs, `${baseName}-export.csv`);
-  };
-
-  const handlePDF = async () => {
-    setPdfLoading(true);
-    setPdfError("");
-
-    const originalTheme = theme;
-    const wasDark = originalTheme === "dark";
-    const originalEditMode = globalEditMode;
-
-    if (wasDark) {
-      setTheme("light");
-      document.documentElement.classList.remove("dark");
-      document.documentElement.style.colorScheme = "light";
-    }
-    if (originalEditMode) {
-      setGlobalEditMode(false);
-    }
-
-    // Wait for React update and ECharts to re-render under light theme
-    await new Promise((r) => setTimeout(r, 600));
-
-    try {
-      await exportPDF(`${baseName}-report.pdf`, {
-        analysis,
-        agg,
-        rows: bugs,
-        visibleKPIs,
-        dataFileName: fileName,
-        aiInsights,
-        aiSchema,
-      });
-    } catch (e) {
-      console.error("PDF export failed:", e);
-      setPdfError("PDF failed. Try again.");
-    } finally {
-      // Restore initial state
-      if (wasDark) {
-        setTheme("dark");
-        document.documentElement.classList.add("dark");
-        document.documentElement.style.colorScheme = "dark";
-      }
-      if (originalEditMode) {
-        setGlobalEditMode(true);
-      }
-      setPdfLoading(false);
-    }
   };
 
   const handleLandscapePDF = async () => {
@@ -151,24 +103,6 @@ export function ExportBar({
         CSV
       </button>
       <button
-        onClick={handlePDF}
-        disabled={pdfLoading}
-        className="flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
-        title="Export as PDF report"
-      >
-        {pdfLoading ? (
-          <>
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Generating…
-          </>
-        ) : (
-          <>
-            <FileText className="h-3.5 w-3.5" />
-            PDF (Portrait)
-          </>
-        )}
-      </button>
-      <button
         onClick={handleLandscapePDF}
         disabled={landscapePdfLoading}
         className="flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
@@ -177,12 +111,12 @@ export function ExportBar({
         {landscapePdfLoading ? (
           <>
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Generating Landscape…
+            Generating PDF…
           </>
         ) : (
           <>
             <FileText className="h-3.5 w-3.5" />
-            PDF (Landscape)
+            Export PDF
           </>
         )}
       </button>

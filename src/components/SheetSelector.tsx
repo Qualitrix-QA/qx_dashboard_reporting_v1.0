@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FileSpreadsheet, CheckSquare, Square, ChevronRight } from "lucide-react";
 import type { SheetInfo } from "@/utils/excelParser";
+import { detectDatasetType } from "@/utils/datasetDetector";
 
 interface SheetSelectorProps {
   sheets: SheetInfo[];
@@ -77,8 +78,22 @@ export function SheetSelector({ sheets, onSelect, onCancel }: SheetSelectorProps
                   <p className={`text-sm font-medium truncate ${isSelected ? "text-primary" : "text-foreground"}`}>
                     {sheet.name}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {sheet.rowCount} rows · {sheet.headers.length} columns
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                    <span>{sheet.rowCount} rows · {sheet.headers.length} columns</span>
+                    <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+                    <span className="font-semibold text-primary/95 text-[10px] tracking-wide uppercase">
+                      {(() => {
+                        const detection = detectDatasetType(sheet.headers, sheet.sampleRows);
+                        const typeLabels: Record<string, string> = {
+                          bug_report: "Bug Report",
+                          test_execution: "Test Execution",
+                          test_case: "Test Case",
+                          requirement_task: "Requirement/Task",
+                          generic: "Generic",
+                        };
+                        return typeLabels[detection.type];
+                      })()}
+                    </span>
                   </p>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">
                     {sheet.headers.slice(0, 5).join(", ")}{sheet.headers.length > 5 ? "…" : ""}

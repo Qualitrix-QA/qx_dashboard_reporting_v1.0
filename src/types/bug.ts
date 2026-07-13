@@ -101,7 +101,7 @@ export type BugRow = RawRow;
 export type Aggregations = DynamicAggregations;
 
 // ─── NEW: Detected data type (more specific than DataFormat) ─────────────────
-export type DetectedDataType = "bug_report" | "test_execution" | "test_case" | "generic";
+export type DetectedDataType = "bug_report" | "test_execution" | "test_case" | "requirement_task" | "generic";
 
 // ─── NEW: AI Schema — structured JSON the AI returns to drive the dashboard ──
 export type AISchemaKPI = {

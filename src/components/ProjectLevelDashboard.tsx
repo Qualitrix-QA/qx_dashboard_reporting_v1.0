@@ -46,7 +46,7 @@ export interface ProjectLevelData {
   executionVelocityTrend: { name: string; rate: number }[];
 }
 
-const defaultProjectData: ProjectLevelData = {
+export const defaultProjectData: ProjectLevelData = {
   totalExecutable: 59585,
   totalExecuted: 89,
   totalPass: 88,
@@ -111,34 +111,21 @@ const defaultProjectData: ProjectLevelData = {
   ]
 };
 
-const LOCAL_STORAGE_KEY = "qualitylens_project_level_dashboard_data";
-
 interface Props {
   isEditable?: boolean;
   theme?: "light" | "dark";
+  data: ProjectLevelData;
+  onUpdateData: (data: ProjectLevelData) => void;
 }
 
-export function ProjectLevelDashboard({ isEditable = false, theme }: Props) {
-  // Load customized user overrides from local storage
-  const [baseData, setBaseData] = useState<ProjectLevelData>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse saved project level data", e);
-      }
-    }
-    return defaultProjectData;
-  });
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(baseData));
-  }, [baseData]);
+export function ProjectLevelDashboard({ isEditable = false, theme, data: baseData = defaultProjectData, onUpdateData }: Props) {
+  const setBaseData = (newData: ProjectLevelData) => {
+    onUpdateData(newData);
+  };
 
   const resetToDefault = () => {
     if (window.confirm("Are you sure you want to reset dashboard metrics to default mockup data?")) {
-      setBaseData(defaultProjectData);
+      onUpdateData(defaultProjectData);
     }
   };
 

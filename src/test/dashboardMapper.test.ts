@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   getProdIssuesData,
   getBugAnalyticsData,
@@ -30,6 +30,15 @@ const dummyAnalysis: DataAnalysis = {
 };
 
 describe("dashboardMapper utility tests", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-03T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   describe("Production Issues Mapping", () => {
     it("should aggregate production bugs correctly for the current week", () => {
       const mockRows: RawRow[] = [

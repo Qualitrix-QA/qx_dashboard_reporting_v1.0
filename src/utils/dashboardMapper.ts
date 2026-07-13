@@ -302,6 +302,17 @@ export interface CustomChartDef {
   data: { name: string; value: number }[];
 }
 
+export interface CustomTableDef {
+  id: string;
+  title: string;
+  columns: string[];
+  data: Record<string, string | number>[];
+  chartType?: "bar" | "line" | "pie";
+  xAxisKey?: string;
+  yAxisKey?: string;
+  showChart?: boolean;
+}
+
 // ─── 2. PRODUCTION ISSUES DASHBOARD MAPPER ──────────────────────────────────
 export type ProdIssuesData = {
   isDemo: boolean;
@@ -317,6 +328,7 @@ export type ProdIssuesData = {
   hiddenCharts?: string[];
   customKPIs?: CustomKPIDef[];
   customCharts?: CustomChartDef[];
+  customTables?: CustomTableDef[];
 };
 
 export function getProdIssuesData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): ProdIssuesData {
@@ -501,6 +513,7 @@ export type BugAnalyticsData = {
   hiddenCharts?: string[];
   customKPIs?: CustomKPIDef[];
   customCharts?: CustomChartDef[];
+  customTables?: CustomTableDef[];
 };
 
 export function getBugAnalyticsData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): BugAnalyticsData {
@@ -686,6 +699,7 @@ export type TestCoverageData = {
   hiddenCharts?: string[];
   customKPIs?: CustomKPIDef[];
   customCharts?: CustomChartDef[];
+  customTables?: CustomTableDef[];
 };
 
 export function getTestCoverageData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): TestCoverageData {
@@ -856,6 +870,7 @@ export type ManualExecutionData = {
   hiddenCharts?: string[];
   customKPIs?: CustomKPIDef[];
   customCharts?: CustomChartDef[];
+  customTables?: CustomTableDef[];
 };
 
 export function getManualExecutionData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): ManualExecutionData {
@@ -1033,6 +1048,7 @@ export type AutomationExecutionData = {
   hiddenCharts?: string[];
   customKPIs?: CustomKPIDef[];
   customCharts?: CustomChartDef[];
+  customTables?: CustomTableDef[];
 };
 
 export function getAutomationExecutionData(rows: RawRow[], analysis: DataAnalysis, aiSchema?: AISchema | null): AutomationExecutionData {

@@ -21,7 +21,7 @@ export interface InitiativeItem {
   description: string;
 }
 
-const defaultInitiatives: InitiativeItem[] = [
+export const defaultInitiatives: InitiativeItem[] = [
   {
     id: "init-1",
     title: "Initiative 1: [Title]",
@@ -56,33 +56,17 @@ const defaultInitiatives: InitiativeItem[] = [
   }
 ];
 
-const LOCAL_STORAGE_KEY = "qualitylens_new_initiatives_data";
-
 interface Props {
   onDelete?: () => void;
   isEditable?: boolean;
+  data: InitiativeItem[];
+  onUpdateData: (data: InitiativeItem[]) => void;
 }
 
-export function NewInitiativesDashboard({ onDelete, isEditable = false }: Props) {
-  const [initiatives, setInitiatives] = useState<InitiativeItem[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse saved initiatives data", e);
-      }
-    }
-    return defaultInitiatives;
-  });
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initiatives));
-  }, [initiatives]);
-
+export function NewInitiativesDashboard({ onDelete, isEditable = false, data: initiatives = defaultInitiatives, onUpdateData }: Props) {
   const updateInitiative = (id: string, field: keyof InitiativeItem, value: string) => {
-    setInitiatives((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    onUpdateData(
+      initiatives.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
   };
 
@@ -96,16 +80,16 @@ export function NewInitiativesDashboard({ onDelete, isEditable = false }: Props)
       status: "Planning",
       description: "Brief description of the initiative, its objectives and expected outcomes."
     };
-    setInitiatives((prev) => [...prev, newItem]);
+    onUpdateData([...initiatives, newItem]);
   };
 
   const deleteInitiative = (id: string) => {
-    setInitiatives((prev) => prev.filter((item) => item.id !== id));
+    onUpdateData(initiatives.filter((item) => item.id !== id));
   };
 
   const resetToDefault = () => {
     if (window.confirm("Are you sure you want to reset all initiatives to placeholders?")) {
-      setInitiatives(defaultInitiatives);
+      onUpdateData(defaultInitiatives);
     }
   };
 

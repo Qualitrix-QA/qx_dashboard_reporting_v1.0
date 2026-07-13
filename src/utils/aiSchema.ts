@@ -57,6 +57,13 @@ export function detectDataTypeHeuristic(analysis: DataAnalysis): DetectedDataTyp
     return "test_case";
   }
 
+  // Requirement/Task: has story points or other requirement keywords
+  const hasStoryPoints = names.some(n => /\b(story points?|sp|points|effort)\b/i.test(n));
+  const hasReqKeywords = names.some(n => /\b(user story|story|acceptance|backlog|epic|requirement|task)\b/i.test(n));
+  if (hasStoryPoints || (hasReqKeywords && !hasSeverity && !hasResultValues)) {
+    return "requirement_task";
+  }
+
   // Bug report: severity without explicit bug keyword
   if (hasSeverity) return "bug_report";
 
@@ -106,6 +113,48 @@ function detectColumnMap(analysis: DataAnalysis): AISchemaColumnMap {
   return map;
 }
 
+// Helper to build requirement KPIs & charts fallback
+function buildRequirementKPIs(kpis: AISchemaKPI[], colMap: AISchemaColumnMap, agg: DynamicAggregations, analysis: DataAnalysis) {
+  // Find story point column
+  const spCol = analysis.columns.find(c => /\b(story points?|sp|points)\b/i.test(c.name.toLowerCase()))?.name;
+  if (spCol) {
+    kpis.push({ id: "sp", label: "Story Points", column: spCol, type: "count", color: "purple" });
+  }
+  if (colMap.statusColumn) {
+    const counts = agg.columnCounts[colMap.statusColumn] || {};
+    const keys = Object.keys(counts).map(k => k.toLowerCase());
+    const todoKeys = ["todo", "to do", "backlog"];
+    const inProgressKeys = ["in progress", "doing", "active", "dev"];
+    const doneKeys = ["done", "closed", "resolved", "completed"];
+
+    if (keys.some(v => todoKeys.some(kw => v === kw || v.includes(kw)))) {
+      kpis.push({ id: "todo", label: "To Do", column: colMap.statusColumn, value: findMatchingValue(counts, todoKeys), type: "count_value", color: "gray" });
+    }
+    if (keys.some(v => inProgressKeys.some(kw => v === kw || v.includes(kw)))) {
+      kpis.push({ id: "inprogress", label: "In Progress", column: colMap.statusColumn, value: findMatchingValue(counts, inProgressKeys), type: "count_value", color: "orange" });
+    }
+    if (keys.some(v => doneKeys.some(kw => v === kw || v.includes(kw)))) {
+      kpis.push({ id: "done", label: "Done", column: colMap.statusColumn, value: findMatchingValue(counts, doneKeys), type: "count_value", color: "green" });
+    }
+  }
+}
+
+function buildRequirementCharts(charts: AISchemaChart[], colMap: AISchemaColumnMap, analysis: DataAnalysis, p: number) {
+  const statusCol = colMap.statusColumn;
+  const prioCol = colMap.priorityColumn;
+  const sprintCol = colMap.releaseColumn;
+
+  if (statusCol) {
+    charts.push({ id: "req_status", type: "pie", title: "Status Distribution", columns: [statusCol], priority: p-- });
+  }
+  if (prioCol) {
+    charts.push({ id: "req_priority", type: "vbar", title: "Priority Breakdown", columns: [prioCol], priority: p-- });
+  }
+  if (sprintCol) {
+    charts.push({ id: "req_sprint", type: "hbar", title: "Milestone Breakdown", columns: [sprintCol], priority: p-- });
+  }
+}
+
 // ─── Fallback schema (no AI needed) ─────────────────────────────────────────
 
 export function generateFallbackSchema(
@@ -131,6 +180,9 @@ export function generateFallbackSchema(
   } else if (dt === "test_case") {
     buildTCKPIs(kpis, colMap, agg);
     buildTCCharts(charts, colMap, analysis, priority);
+  } else if (dt === "requirement_task") {
+    buildRequirementKPIs(kpis, colMap, agg, analysis);
+    buildRequirementCharts(charts, colMap, analysis, priority);
   } else {
     buildGenericKPIs(kpis, analysis, agg);
     buildGenericCharts(charts, analysis, priority);
@@ -383,6 +435,7 @@ function generateSummary(dt: DetectedDataType, total: number, colCount: number):
     bug_report: "Bug/Defect Report",
     test_execution: "Test Execution Report",
     test_case: "Test Case Repository",
+    requirement_task: "Requirement/Task Sheet",
     generic: "Data Analysis",
   };
   return `${types[dt]} — ${total.toLocaleString()} records across ${colCount} columns`;
@@ -485,7 +538,7 @@ ${JSON.stringify(sampleRows, null, 1)}
 
 Return ONLY valid JSON (no markdown, no code fences) matching this exact structure:
 {
-  "dataType": "bug_report" | "test_execution" | "test_case" | "generic",
+  "dataType": "bug_report" | "test_execution" | "test_case" | "requirement_task" | "generic",
   "summary": "one-line description of the dataset",
   "columnMap": {
     "moduleColumn": "exact column name or null",
@@ -510,6 +563,7 @@ RULES:
 - For BUG DATA KPIs: Total Bugs, then counts for each severity level (Critical/High/Medium/Low), Open count, Closed/Fixed count
 - For TEST EXECUTION KPIs: Total TCs, Pass + pass rate %, Fail + fail rate %, Blocked count, Not Executed count
 - For TEST CASE KPIs: Total TCs, P1/P2/P3 counts, total modules count
+- For REQUIREMENT/TASK KPIs: Total Requirements/Tasks, Story Points sum (if SP column exists), To Do count, In Progress count, Done/Closed count
 - **CRITICAL**: ONLY use categorical columns for charts (e.g., Status, Priority, Severity, Assignee, Environment). NEVER use free-text columns (like Comments, Descriptions, Titles, Steps, Actual Result) or unique ID columns.
 - **CRITICAL**: You MUST include a "heatmap" chart for cross-analysis (e.g., Assignee × Severity, Status × Severity, Priority × Result, Environment × Severity, or Module × Status).
 - **CRITICAL**: You MUST include a "line" chart if a Date column exists.

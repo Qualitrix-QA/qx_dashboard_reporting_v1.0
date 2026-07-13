@@ -29,7 +29,7 @@ export interface RiskItem {
   owner: string;
 }
 
-const defaultRisks: RiskItem[] = [
+export const defaultRisks: RiskItem[] = [
   {
     id: "risk-1",
     description: "[Risk description – e.g. Automation suite lag]",
@@ -82,33 +82,17 @@ const defaultRisks: RiskItem[] = [
   }
 ];
 
-const LOCAL_STORAGE_KEY = "qualitylens_risk_mitigation_data";
-
 interface Props {
   onDelete?: () => void;
   isEditable?: boolean;
+  data: RiskItem[];
+  onUpdateData: (data: RiskItem[]) => void;
 }
 
-export function RiskMitigationDashboard({ onDelete, isEditable = false }: Props) {
-  const [risks, setRisks] = useState<RiskItem[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse saved risks data", e);
-      }
-    }
-    return defaultRisks;
-  });
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(risks));
-  }, [risks]);
-
+export function RiskMitigationDashboard({ onDelete, isEditable = false, data: risks = defaultRisks, onUpdateData }: Props) {
   const updateRisk = (id: string, field: keyof RiskItem, value: string) => {
-    setRisks((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    onUpdateData(
+      risks.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
   };
 
@@ -124,16 +108,16 @@ export function RiskMitigationDashboard({ onDelete, isEditable = false }: Props)
       mitigationPlan: "[Mitigation action]",
       owner: "Name"
     };
-    setRisks((prev) => [...prev, newItem]);
+    onUpdateData([...risks, newItem]);
   };
 
   const deleteRisk = (id: string) => {
-    setRisks((prev) => prev.filter((item) => item.id !== id));
+    onUpdateData(risks.filter((item) => item.id !== id));
   };
 
   const resetToDefault = () => {
     if (window.confirm("Are you sure you want to reset all risks to placeholders?")) {
-      setRisks(defaultRisks);
+      onUpdateData(defaultRisks);
     }
   };
 
