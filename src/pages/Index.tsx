@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useProject } from "@/context/ProjectContext";
 import { Bug, Trash2, Upload as UploadIcon, Settings, History, AlertTriangle, Camera, Scan, ThumbsUp, Sparkles, Plus, Lock, Unlock } from "lucide-react";
 import { FileUpload } from "@/components/FileUpload";
 import { GoogleSheetsConnect } from "@/components/GoogleSheetsConnect";
@@ -13,6 +14,8 @@ import { DynamicDetailDrawer } from "@/components/DynamicDetailDrawer";
 import { SettingsModal } from "@/components/SettingsModal";
 import { AIInsightsPanel } from "@/components/AIInsightsPanel";
 import { ExportBar } from "@/components/ExportBar";
+import { AuthWidget } from "@/components/AuthWidget";
+import { ProjectToolbar } from "@/components/ProjectToolbar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { InsightsSidebar } from "@/components/InsightsSidebar";
 import { ModuleHealthMap } from "@/components/ModuleHealthMap";
@@ -163,89 +166,33 @@ const BLANK_TEMPLATE_ROWS: RawRow[] = [
 const DEFAULT_PREFS: UserPreferences = { theme: "dark", aiEnabled: false };
 
 export default function Dashboard() {
-  const [rows, setRows] = useState<RawRow[]>([]);
-  const [filteredRows, setFilteredRows] = useState<RawRow[]>([]);
-  const [fileName, setFileName] = useState("");
+  // ── Project state (from ProjectContext) ──────────────────────────────────
+  const {
+    rows, setRows,
+    filteredRows, setFilteredRows,
+    fileName, setFileName,
+    truncationWarning, setTruncationWarning,
+    aiSchema, setAiSchema,
+    latestInsights, setLatestInsights,
+    projectLevelData, setProjectLevelData,
+    newInitiativesData, setNewInitiativesData,
+    riskMitigationData, setRiskMitigationData,
+    dashboardOverrides,
+    dashboardNotes,
+    slideVisibility, setSlideVisible,
+    updateDashboardOverride,
+    resetDashboardOverride,
+    handleAddNote,
+    handleDeleteNote,
+    clearProjectData,
+  } = useProject();
+
+  // ── Local UI/App state (NOT serialized as project) ───────────────────────
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRow, setSelectedRow] = useState<RawRow | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [prefs, setPrefs] = useState<UserPreferences>(DEFAULT_PREFS);
   const [showSettings, setShowSettings] = useState(false);
-
-  // Overrides and notes state for Specialized QA Dashboards
-  const [dashboardOverrides, setDashboardOverrides] = useState<Record<string, any>>(() => {
-    try {
-      const saved = localStorage.getItem("qualitylens_dashboard_overrides");
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  const [dashboardNotes, setDashboardNotes] = useState<Record<string, string[]>>(() => {
-    try {
-      const saved = localStorage.getItem("qualitylens_dashboard_notes");
-      if (!saved) return {};
-      const parsed = JSON.parse(saved);
-      const normalized: Record<string, string[]> = {};
-      for (const key of Object.keys(parsed)) {
-        if (Array.isArray(parsed[key])) {
-          normalized[key] = parsed[key];
-        } else if (typeof parsed[key] === "string") {
-          normalized[key] = parsed[key].split("\n").map((s: string) => s.trim()).filter(Boolean);
-        } else {
-          normalized[key] = [];
-        }
-      }
-      return normalized;
-    } catch {
-      return {};
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_dashboard_overrides", JSON.stringify(dashboardOverrides));
-  }, [dashboardOverrides]);
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_dashboard_notes", JSON.stringify(dashboardNotes));
-  }, [dashboardNotes]);
-
-  const updateDashboardOverride = useCallback((dashboardId: string, newData: any) => {
-    setDashboardOverrides(prev => ({
-      ...prev,
-      [dashboardId]: newData
-    }));
-  }, []);
-
-  const resetDashboardOverride = useCallback((dashboardId: string) => {
-    setDashboardOverrides(prev => {
-      const copy = { ...prev };
-      delete copy[dashboardId];
-      return copy;
-    });
-  }, []);
-
-  const handleAddNote = useCallback((dashboardId: string, noteText: string) => {
-    if (!noteText.trim()) return;
-    setDashboardNotes(prev => {
-      const list = prev[dashboardId] || [];
-      return {
-        ...prev,
-        [dashboardId]: [...list, noteText.trim()]
-      };
-    });
-  }, []);
-
-  const handleDeleteNote = useCallback((dashboardId: string, noteIndex: number) => {
-    setDashboardNotes(prev => {
-      const list = prev[dashboardId] || [];
-      return {
-        ...prev,
-        [dashboardId]: list.filter((_, i) => i !== noteIndex)
-      };
-    });
-  }, []);
   const [googleConfig, setGoogleConfig] = useState<GoogleSheetsConfig | null>(null);
   const [jiraConfig, setJiraConfig] = useState<JiraConfig | null>(null);
   const [pendingSheets, setPendingSheets] = useState<SheetInfo[] | null>(null);
@@ -254,65 +201,21 @@ export default function Dashboard() {
   const [pendingJiraConfig, setPendingJiraConfig] = useState<JiraConfig | null>(null);
   const [visibleKPIs, setVisibleKPIs] = useState<Set<number>>(new Set());
   const [showSidebar, setShowSidebar] = useState(false);
-  const [latestInsights, setLatestInsights] = useState<string | null>(null);
-  const [truncationWarning, setTruncationWarning] = useState("");
 
-  const [aiSchema, setAiSchema] = useState<AISchema | null>(null);
   const [schemaLoading, setSchemaLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState<string>("project_level");
   const hasUserSelectedTab = useRef(false);
   const [globalEditMode, setGlobalEditMode] = useState<boolean>(false);
 
-  const [showProdIssues, setShowProdIssues] = useState<boolean>(() => {
-    return localStorage.getItem("qualitylens_show_prod_issues") !== "false";
-  });
-  const [showBugAnalytics, setShowBugAnalytics] = useState<boolean>(() => {
-    return localStorage.getItem("qualitylens_show_bug_analytics") !== "false";
-  });
-  const [showTestCoverage, setShowTestCoverage] = useState<boolean>(() => {
-    return localStorage.getItem("qualitylens_show_test_coverage") !== "false";
-  });
-  const [showManualExecution, setShowManualExecution] = useState<boolean>(() => {
-    return localStorage.getItem("qualitylens_show_manual_execution") !== "false";
-  });
-  const [showAutomationExecution, setShowAutomationExecution] = useState<boolean>(() => {
-    return localStorage.getItem("qualitylens_show_automation_execution") !== "false";
-  });
-  const [showNewInitiatives, setShowNewInitiatives] = useState<boolean>(() => {
-    return localStorage.getItem("qualitylens_show_new_initiatives") !== "false";
-  });
-  const [showRiskMitigation, setShowRiskMitigation] = useState<boolean>(() => {
-    return localStorage.getItem("qualitylens_show_risk_mitigation") !== "false";
-  });
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_show_prod_issues", String(showProdIssues));
-  }, [showProdIssues]);
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_show_bug_analytics", String(showBugAnalytics));
-  }, [showBugAnalytics]);
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_show_test_coverage", String(showTestCoverage));
-  }, [showTestCoverage]);
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_show_manual_execution", String(showManualExecution));
-  }, [showManualExecution]);
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_show_automation_execution", String(showAutomationExecution));
-  }, [showAutomationExecution]);
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_show_new_initiatives", String(showNewInitiatives));
-  }, [showNewInitiatives]);
-
-  useEffect(() => {
-    localStorage.setItem("qualitylens_show_risk_mitigation", String(showRiskMitigation));
-  }, [showRiskMitigation]);
+  // Slide visibility aliases (sourced from ProjectContext for cleaner JSX)
+  const showProdIssues        = slideVisibility["prod_issues"];
+  const showBugAnalytics      = slideVisibility["bug_analytics"];
+  const showTestCoverage      = slideVisibility["test_coverage"];
+  const showManualExecution   = slideVisibility["manual_execution"];
+  const showAutomationExecution = slideVisibility["automation_execution"];
+  const showNewInitiatives    = slideVisibility["new_initiatives"];
+  const showRiskMitigation    = slideVisibility["risk_mitigation"];
 
   // Track current analysis record ID to update (not duplicate) on insights generation
   const currentAnalysisId = useRef<string | null>(null);
@@ -557,16 +460,9 @@ export default function Dashboard() {
     if (!confirmed) return;
     setJiraConfig(null);
     await clearAllData();
-    setDashboardOverrides({});
-    setDashboardNotes({});
-    setRows([]);
-    setFilteredRows([]);
-    setFileName("");
-    setLatestInsights(null);
-    setTruncationWarning("");
-    setAiSchema(null);
+    clearProjectData();
     currentAnalysisId.current = null;
-  }, []);
+  }, [clearProjectData]);
 
   const handleClearCache = useCallback(async () => {
     const confirmed = window.confirm(
@@ -574,34 +470,20 @@ export default function Dashboard() {
     );
     if (!confirmed) return;
     await clearAllData();
-    setDashboardOverrides({});
-    setDashboardNotes({});
-    setRows([]);
-    setFilteredRows([]);
-    setFileName("");
     setGoogleConfig(null);
     setJiraConfig(null);
-    setLatestInsights(null);
-    setTruncationWarning("");
-    setAiSchema(null);
+    clearProjectData();
     currentAnalysisId.current = null;
-  }, []);
+  }, [clearProjectData]);
 
   const handleDisconnectGoogle = useCallback(async () => {
     const confirmed = window.confirm("Disconnect Google Sheet and clear data?");
     if (!confirmed) return;
     setGoogleConfig(null);
     await clearAllData();
-    setDashboardOverrides({});
-    setDashboardNotes({});
-    setRows([]);
-    setFilteredRows([]);
-    setFileName("");
-    setLatestInsights(null);
-    setTruncationWarning("");
-    setAiSchema(null);
+    clearProjectData();
     currentAnalysisId.current = null;
-  }, []);
+  }, [clearProjectData]);
 
   const handleStartBlankTemplate = useCallback(async () => {
     setIsLoading(true);
@@ -799,6 +681,8 @@ export default function Dashboard() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <AuthWidget />
+            <ProjectToolbar />
             {hasData && (
               <>
                 <ExportBar
@@ -1006,7 +890,7 @@ export default function Dashboard() {
               </TabsList>
 
               <TabsContent id="tab-project_level" value="project_level" className="mt-4 outline-none space-y-8 animate-fade-in">
-                <ProjectLevelDashboard isEditable={globalEditMode} theme={theme} />
+                <ProjectLevelDashboard isEditable={globalEditMode} theme={theme} data={projectLevelData} onUpdateData={setProjectLevelData} />
               </TabsContent>
 
               <TabsContent id="tab-report_explorer" value="report_explorer" className="mt-4 outline-none space-y-8 animate-fade-in">
@@ -1113,7 +997,7 @@ export default function Dashboard() {
                       hasOverrides={!!dashboardOverrides["prod_issues"]}
                       isEditable={globalEditMode}
                       theme={theme}
-                      onDelete={() => setShowProdIssues(false)}
+                      onDelete={() => setSlideVisible("prod_issues", false)}
                     />
                     <DashboardNotesList
                       dashboardId="prod_issues"
@@ -1138,7 +1022,7 @@ export default function Dashboard() {
                       hasOverrides={!!dashboardOverrides["bug_analytics"]}
                       isEditable={globalEditMode}
                       theme={theme}
-                      onDelete={() => setShowBugAnalytics(false)}
+                      onDelete={() => setSlideVisible("bug_analytics", false)}
                     />
                     <DashboardNotesList
                       dashboardId="bug_analytics"
@@ -1163,7 +1047,7 @@ export default function Dashboard() {
                       hasOverrides={!!dashboardOverrides["test_coverage"]}
                       isEditable={globalEditMode}
                       theme={theme}
-                      onDelete={() => setShowTestCoverage(false)}
+                      onDelete={() => setSlideVisible("test_coverage", false)}
                     />
                     <DashboardNotesList
                       dashboardId="test_coverage"
@@ -1188,7 +1072,7 @@ export default function Dashboard() {
                       hasOverrides={!!dashboardOverrides["manual_execution"]}
                       isEditable={globalEditMode}
                       theme={theme}
-                      onDelete={() => setShowManualExecution(false)}
+                      onDelete={() => setSlideVisible("manual_execution", false)}
                     />
                     <DashboardNotesList
                       dashboardId="manual_execution"
@@ -1213,7 +1097,7 @@ export default function Dashboard() {
                       hasOverrides={!!dashboardOverrides["automation_execution"]}
                       isEditable={globalEditMode}
                       theme={theme}
-                      onDelete={() => setShowAutomationExecution(false)}
+                      onDelete={() => setSlideVisible("automation_execution", false)}
                     />
                     <DashboardNotesList
                       dashboardId="automation_execution"
@@ -1228,7 +1112,12 @@ export default function Dashboard() {
                 {/* 6. New Initiatives */}
                 {showNewInitiatives && (
                   <div data-pdf-page="dashboard" className="rounded-2xl border border-border bg-card p-6 shadow-xl space-y-6">
-                    <NewInitiativesDashboard onDelete={() => setShowNewInitiatives(false)} isEditable={globalEditMode} />
+                    <NewInitiativesDashboard
+                      onDelete={() => setSlideVisible("new_initiatives", false)}
+                      isEditable={globalEditMode}
+                      data={newInitiativesData}
+                      onUpdateData={setNewInitiativesData}
+                    />
                     <DashboardNotesList
                       dashboardId="new_initiatives"
                       notes={dashboardNotes["new_initiatives"]}
@@ -1242,7 +1131,12 @@ export default function Dashboard() {
                 {/* 7. Risk & Mitigation */}
                 {showRiskMitigation && (
                   <div data-pdf-page="dashboard" className="rounded-2xl border border-border bg-card p-6 shadow-xl space-y-6">
-                    <RiskMitigationDashboard onDelete={() => setShowRiskMitigation(false)} isEditable={globalEditMode} />
+                    <RiskMitigationDashboard
+                      onDelete={() => setSlideVisible("risk_mitigation", false)}
+                      isEditable={globalEditMode}
+                      data={riskMitigationData}
+                      onUpdateData={setRiskMitigationData}
+                    />
                     <DashboardNotesList
                       dashboardId="risk_mitigation"
                       notes={dashboardNotes["risk_mitigation"]}
@@ -1259,7 +1153,7 @@ export default function Dashboard() {
                     <span className="text-xs font-semibold text-muted-foreground mr-1">Optional Slides:</span>
                     {!showProdIssues && (
                       <Button
-                        onClick={() => setShowProdIssues(true)}
+                        onClick={() => setSlideVisible("prod_issues", true)}
                         variant="outline"
                         size="sm"
                         className="text-xs gap-1.5 h-8 border-dashed"
@@ -1269,7 +1163,7 @@ export default function Dashboard() {
                     )}
                     {!showBugAnalytics && (
                       <Button
-                        onClick={() => setShowBugAnalytics(true)}
+                        onClick={() => setSlideVisible("bug_analytics", true)}
                         variant="outline"
                         size="sm"
                         className="text-xs gap-1.5 h-8 border-dashed"
@@ -1279,7 +1173,7 @@ export default function Dashboard() {
                     )}
                     {!showTestCoverage && (
                       <Button
-                        onClick={() => setShowTestCoverage(true)}
+                        onClick={() => setSlideVisible("test_coverage", true)}
                         variant="outline"
                         size="sm"
                         className="text-xs gap-1.5 h-8 border-dashed"
@@ -1289,7 +1183,7 @@ export default function Dashboard() {
                     )}
                     {!showManualExecution && (
                       <Button
-                        onClick={() => setShowManualExecution(true)}
+                        onClick={() => setSlideVisible("manual_execution", true)}
                         variant="outline"
                         size="sm"
                         className="text-xs gap-1.5 h-8 border-dashed"
@@ -1299,7 +1193,7 @@ export default function Dashboard() {
                     )}
                     {!showAutomationExecution && (
                       <Button
-                        onClick={() => setShowAutomationExecution(true)}
+                        onClick={() => setSlideVisible("automation_execution", true)}
                         variant="outline"
                         size="sm"
                         className="text-xs gap-1.5 h-8 border-dashed"
@@ -1309,7 +1203,7 @@ export default function Dashboard() {
                     )}
                     {!showNewInitiatives && (
                       <Button
-                        onClick={() => setShowNewInitiatives(true)}
+                        onClick={() => setSlideVisible("new_initiatives", true)}
                         variant="outline"
                         size="sm"
                         className="text-xs gap-1.5 h-8 border-dashed"
@@ -1319,7 +1213,7 @@ export default function Dashboard() {
                     )}
                     {!showRiskMitigation && (
                       <Button
-                        onClick={() => setShowRiskMitigation(true)}
+                        onClick={() => setSlideVisible("risk_mitigation", true)}
                         variant="outline"
                         size="sm"
                         className="text-xs gap-1.5 h-8 border-dashed"

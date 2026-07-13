@@ -131,7 +131,7 @@ export function TestCoverageDashboard({ rows, analysis, aiSchema, data: propData
       id: `custom_kpi_${Date.now()}`,
       label: "Custom Metric",
       value: "0",
-      sub: "Description",
+      sub: "",
       color: "border-t-[#3b82f6] text-[#3b82f6]"
     });
     onUpdateData({ ...data, customKPIs: newKpis });
@@ -387,7 +387,18 @@ export function TestCoverageDashboard({ rows, analysis, aiSchema, data: propData
                   <input
                     type="text"
                     value={kpi.value}
-                    onChange={(e) => handleUpdateCustomKPI(kpi.id, { value: e.target.value })}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const updated = kpi.value === "0" && raw.length > 1 && raw.startsWith("0")
+                        ? raw.slice(1)
+                        : raw;
+                      handleUpdateCustomKPI(kpi.id, { value: updated });
+                    }}
+                    onBlur={() => {
+                      if (kpi.value === "" || kpi.value === null || kpi.value === undefined) {
+                        handleUpdateCustomKPI(kpi.id, { value: "0" });
+                      }
+                    }}
                     placeholder="Value"
                     className={`w-full bg-transparent border-0 border-b border-border/40 text-center text-2xl font-extrabold focus:ring-0 p-0 hover:border-border cursor-text focus:border-primary ${kpi.color.split(" ")[1] || "text-primary"}`}
                   />
@@ -423,7 +434,7 @@ export function TestCoverageDashboard({ rows, analysis, aiSchema, data: propData
                   <div className={`mt-2 text-3xl font-extrabold tracking-tight select-all ${kpi.color.split(" ")[1] || "text-primary"}`}>
                     {kpi.value}
                   </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{kpi.sub}</p>
+                  {kpi.sub && <p className="mt-1 text-[10px] text-muted-foreground">{kpi.sub}</p>}
                 </>
               )}
             </div>

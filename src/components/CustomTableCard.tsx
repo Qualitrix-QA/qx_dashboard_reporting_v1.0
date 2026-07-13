@@ -4,7 +4,7 @@ import * as echarts from "echarts/core";
 import { BarChart, LineChart, PieChart } from "echarts/charts";
 import { TooltipComponent, GridComponent, LegendComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
-import { Trash2, Plus, X, BarChart3, LineChart as LineIcon, PieChart as PieIcon, GripVertical, TableIcon } from "lucide-react";
+import { Trash2, Plus, X, BarChart3, LineChart as LineIcon, PieChart as PieIcon, GripVertical, TableIcon, Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -57,6 +57,12 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
 
   const total = useMemo(() => chartData.reduce((s, v) => s + v.value, 0), [chartData]);
   const hasData = chartData.some(d => d.value > 0);
+
+  const hasAnyData = useMemo(() => {
+    return table.data.some(row =>
+      table.columns.some(col => String(row[col] ?? "").trim() !== "")
+    );
+  }, [table.data, table.columns]);
 
   const option: echarts.EChartsCoreOption = useMemo(() => {
     const categories = chartData.map(d => d.name || "Category");
@@ -196,13 +202,13 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
         <div className="p-5 border-b lg:border-b-0 lg:border-r border-border/50 flex flex-col gap-4">
           {/* Table Title */}
           <div>
-            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
+            <label className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider block mb-1.5">
               Table Title
             </label>
             <Input
               value={table.title}
               onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="e.g. Sprint Defect Summary"
+              placeholder="New Custom Table"
               className="h-9 text-sm font-semibold"
             />
           </div>
@@ -210,19 +216,19 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
           {/* Table Data */}
           <div className="flex-1 flex flex-col">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              <label className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">
                 Table Data
               </label>
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleAddColumn}
-                  className="text-[11px] font-semibold text-primary hover:text-primary/80 flex items-center gap-0.5 transition-colors"
+                  className="text-[11px] font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-0.5 transition-colors"
                 >
                   <Plus className="h-3 w-3" /> Add Column
                 </button>
                 <button
                   onClick={handleAddRow}
-                  className="text-[11px] font-semibold text-primary hover:text-primary/80 flex items-center gap-0.5 transition-colors"
+                  className="text-[11px] font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-0.5 transition-colors"
                 >
                   <Plus className="h-3 w-3" /> Add Row
                 </button>
@@ -236,7 +242,11 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-muted/40 border-b border-border">
                       {/* Drag handle column header */}
-                      <th className="w-8 border-r border-border p-0" />
+                      <th className="w-8 border-r border-border p-0 bg-muted/40">
+                        <div className="flex items-center justify-center py-2">
+                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        </div>
+                      </th>
                       {/* Column headers */}
                       {table.columns.map((col) => (
                         <th key={col} className="border-r border-border p-0 min-w-[90px] group/col">
@@ -245,7 +255,7 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
                               type="text"
                               defaultValue={col}
                               onBlur={(e) => handleColNameChange(col, e.target.value)}
-                              className="w-full bg-transparent px-2 py-2 text-[11px] font-semibold text-foreground focus:outline-none focus:bg-primary/5"
+                              className="w-full bg-transparent px-2 py-2 text-[11px] font-semibold text-foreground text-center focus:outline-none focus:bg-primary/5"
                             />
                             <button
                               onClick={() => handleDeleteColumn(col)}
@@ -257,11 +267,11 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
                           </div>
                         </th>
                       ))}
-                      {/* Add column button */}
-                      <th className="w-8 p-0">
+                      {/* Add column button header */}
+                      <th className="w-8 p-0 border-l border-border bg-muted/40">
                         <button
                           onClick={handleAddColumn}
-                          className="w-full h-full flex items-center justify-center p-2 text-primary hover:bg-primary/10 transition-colors"
+                          className="w-full h-full flex items-center justify-center p-2 text-sky-600 hover:bg-primary/10 transition-colors"
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
@@ -271,10 +281,9 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
                   <tbody>
                     {table.data.map((row, rIdx) => (
                       <tr key={rIdx} className="border-b border-border/50 last:border-0 hover:bg-muted/10 group/row">
-                        {/* Row number + drag handle */}
+                        {/* Row number column */}
                         <td className="border-r border-border/50 w-8">
-                          <div className="flex items-center justify-center gap-0.5 py-1.5">
-                            <GripVertical className="h-3 w-3 text-muted-foreground/40 opacity-0 group-hover/row:opacity-100" />
+                          <div className="flex items-center justify-center py-1.5">
                             <span className="text-[10px] text-muted-foreground/60 w-4 text-center">{rIdx + 1}</span>
                           </div>
                         </td>
@@ -310,7 +319,7 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
             {/* Add Row link */}
             <button
               onClick={handleAddRow}
-              className="mt-2 text-[11px] font-semibold text-primary hover:text-primary/80 flex items-center gap-0.5 self-start transition-colors"
+              className="mt-2 text-[11px] font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-0.5 self-start transition-colors"
             >
               <Plus className="h-3 w-3" /> Add Row
             </button>
@@ -321,8 +330,8 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
         <div className="p-5 flex flex-col gap-4 bg-muted/5">
           {/* Header: Live Preview + stats + delete */}
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-[10px] font-bold text-sky-600 uppercase tracking-widest flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
               Live Preview
             </span>
             <div className="flex items-center gap-3">
@@ -339,60 +348,82 @@ export function CustomTableCard({ table, isEditable, theme, onUpdate, onDelete }
             </div>
           </div>
 
-          {/* Visualization selector */}
-          <div>
-            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">
-              Visualization <span className="text-muted-foreground/50 font-normal normal-case">(Optional)</span>
+          {/* Table Preview Section */}
+          <div className="flex-1 flex flex-col">
+            <label className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider block mb-2">
+              Table Preview
             </label>
-            <div className="flex gap-2">
-              <Button size="sm" variant={chartType === "bar" ? "default" : "outline"} className="h-8 text-xs flex-1 gap-1" onClick={() => handleTypeChange("bar")}>
-                <BarChart3 className="h-3.5 w-3.5" /> Bar
-              </Button>
-              <Button size="sm" variant={chartType === "line" ? "default" : "outline"} className="h-8 text-xs flex-1 gap-1" onClick={() => handleTypeChange("line")}>
-                <LineIcon className="h-3.5 w-3.5" /> Line
-              </Button>
-              <Button size="sm" variant={chartType === "pie" ? "default" : "outline"} className="h-8 text-xs flex-1 gap-1" onClick={() => handleTypeChange("pie")}>
-                <PieIcon className="h-3.5 w-3.5" /> Pie
-              </Button>
-            </div>
-          </div>
 
-          {/* Chart or Placeholder */}
-          <div className="flex-1 border border-border/60 rounded-xl bg-card/50 flex flex-col items-center justify-center min-h-[200px] overflow-hidden">
-            {hasData ? (
-              <div className="w-full h-full p-2">
-                <ReactEChartsCore
-                  echarts={echarts}
-                  option={option}
-                  style={{ height: 200 }}
-                  notMerge
-                  lazyUpdate
-                />
+            {/* Render Preview Table containing headers & empty/filled content */}
+            <div className="flex-grow border border-border rounded-xl bg-card overflow-hidden flex flex-col min-h-[300px]">
+              <div className="overflow-auto max-h-[320px] flex-1">
+                <table className="w-full border-collapse text-left text-xs table-fixed">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border">
+                      {table.columns.map((col) => (
+                        <th key={col} className="px-4 py-3 font-semibold text-muted-foreground border-r border-border last:border-r-0 truncate min-w-[90px]">
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hasAnyData ? (
+                      table.data.map((row, rIdx) => (
+                        <tr key={rIdx} className="border-b border-border/50 last:border-0 hover:bg-muted/5">
+                          {table.columns.map((col) => (
+                            <td key={col} className="px-4 py-2.5 text-foreground border-r border-border/50 last:border-r-0 truncate min-w-[80px]">
+                              {String(row[col] ?? "")}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={table.columns.length} className="py-12">
+                          <div className="flex flex-col items-center justify-center gap-3 text-center">
+                            {/* SVG placeholder illustration matching mockup */}
+                            <div className="text-muted-foreground/25">
+                              <svg className="w-24 h-16" viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="5" y="5" width="90" height="50" rx="6" stroke="currentColor" strokeWidth="2" />
+                                <line x1="5" y1="20" x2="95" y2="20" stroke="currentColor" strokeWidth="2" />
+                                <line x1="5" y1="35" x2="95" y2="35" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                                <line x1="25" y1="5" x2="25" y2="55" stroke="currentColor" strokeWidth="1.5" />
+                                <line x1="50" y1="5" x2="50" y2="55" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                                <line x1="75" y1="5" x2="75" y2="55" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                              </svg>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm font-semibold text-foreground/80">Your table will appear here</p>
+                              <p className="text-[11px] text-muted-foreground max-w-[220px] mx-auto">
+                                Add data in the table to see a live preview.
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
-                {/* Table placeholder icon */}
-                <div className="opacity-20">
-                  <TableIcon className="h-14 w-14 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground/70">Your table will appear here</p>
-                  <p className="text-[11px] text-muted-foreground mt-1 max-w-[200px]">
-                    Add data to see a preview or choose a visualization to analyze your table.
-                  </p>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
 
+      {/* ── Info Banner at bottom ── */}
+      <div className="px-5 py-3 border-t border-border bg-blue-50/40 dark:bg-blue-950/10 flex items-center gap-3 text-xs text-blue-700 dark:text-blue-300">
+        <Info className="h-4 w-4 shrink-0 text-blue-500" />
+        <span>Use the table editor to add or remove rows and columns. Drag columns to reorder. Click on column headers to rename.</span>
+      </div>
+
       {/* ── Footer: Save button ── */}
       <div className="border-t border-border px-5 py-3 flex justify-end bg-muted/10">
-        <Button onClick={handleSave} className="h-9 px-6 text-sm font-semibold gap-2">
+        <Button onClick={handleSave} className="h-9 px-6 text-sm font-semibold bg-[#008db6] hover:bg-[#007ba0] text-white transition-colors">
           Save Table
         </Button>
       </div>
     </div>
   );
 }
+
