@@ -35,6 +35,7 @@ export function ShareProjectModal({
   const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [shareLink, setShareLink] = useState<string | null>(null);
+  const [notRegistered, setNotRegistered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -42,6 +43,7 @@ export function ShareProjectModal({
   const resetForm = useCallback(() => {
     setEmail("");
     setShareLink(null);
+    setNotRegistered(false);
     setError(null);
     setLinkCopied(false);
   }, []);
@@ -75,16 +77,22 @@ export function ShareProjectModal({
 
     setIsLoading(true);
     try {
-      // Look up user by email
+      // Look up user by email in Firestore users collection.
+      // A record only exists if the recipient has previously signed into this app.
       const recipient = await getUserByEmail(trimmedEmail);
 
       if (!recipient) {
-        setError("User not found. Try generating a share link instead.");
+        // Recipient hasn't signed up yet — auto-generate a share link
+        // and surface a clear message so the owner knows what to do.
+        const linkId = await generateShareLink(projectId, trimmedEmail);
+        const shareUrl = `${window.location.origin}/shared/${linkId}`;
+        setShareLink(shareUrl);
+        setNotRegistered(true);
         setIsLoading(false);
         return;
       }
 
-      // Share project with registered user
+      // Recipient is already registered — share directly and send a notification.
       await shareProjectWithUser(
         projectId,
         recipient.uid,
@@ -235,8 +243,48 @@ export function ShareProjectModal({
             </Button>
           </div>
 
-          {/* Share Link Display */}
-          {shareLink && (
+          {/* Not-registered info banner + generated link */}
+          {notRegistered && shareLink && (
+            <div className="space-y-3 animate-fade-in">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 flex items-start gap-2.5">
+                <span className="mt-0.5 shrink-0 text-amber-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-amber-600 dark:text-amber-400">User isn't registered</p>
+                  <p className="text-xs text-amber-600/80 dark:text-amber-400/80 mt-0.5">
+                    <span className="font-semibold">{email}</span> hasn't signed up yet. A share link has been generated — copy it and send it to them. They'll be prompted to create an account before accessing the project.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Share Link
+                </Label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={shareLink}
+                    className="flex h-9 flex-1 rounded-md border border-input bg-background/50 px-3 py-1 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                  <Button
+                    onClick={handleCopyLink}
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    {linkCopied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Share Link Display (for manually generated links where user IS registered) */}
+          {shareLink && !notRegistered && (
             <div className="space-y-2">
               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 Share Link
@@ -255,7 +303,7 @@ export function ShareProjectModal({
                   className="shrink-0"
                 >
                   <Copy className="h-3.5 w-3.5" />
-                  {linkCopied ? "Copied" : "Copy"}
+                  {linkCopied ? "Copied!" : "Copy"}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground/80">

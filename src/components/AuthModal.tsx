@@ -11,10 +11,12 @@ interface AuthModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  /** When true, defaults the modal tab to "Create Account" rather than "Sign In". */
+  defaultToSignUp?: boolean;
 }
 
-export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+export function AuthModal({ open, onOpenChange, onSuccess, defaultToSignUp = false }: AuthModalProps) {
+  const [mode, setMode] = useState<"login" | "signup">(defaultToSignUp ? "signup" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -70,16 +72,26 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
       setDisplayName("");
     } catch (err: any) {
       console.error("Auth error:", err);
-      // Clean firebase error messages (e.g. auth/invalid-credential -> Invalid credentials)
+      // Map Firebase auth error codes to user-friendly messages.
       let cleanMsg = err.message || "An authentication error occurred.";
-      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
-        cleanMsg = "Invalid email or password.";
-      } else if (err.code === "auth/email-already-in-use") {
-        cleanMsg = "This email is already in use.";
-      } else if (err.code === "auth/weak-password") {
+      const code = err.code || "";
+      if (
+        code === "auth/invalid-credential" ||
+        code === "auth/invalid-login-credentials" ||
+        code === "auth/user-not-found" ||
+        code === "auth/wrong-password"
+      ) {
+        cleanMsg = "Invalid email or password. Please check your credentials and try again.";
+      } else if (code === "auth/email-already-in-use") {
+        cleanMsg = "This email is already registered. Please sign in instead.";
+      } else if (code === "auth/weak-password") {
         cleanMsg = "Password must be at least 6 characters.";
-      } else if (err.code === "auth/invalid-email") {
+      } else if (code === "auth/invalid-email") {
         cleanMsg = "Invalid email address format.";
+      } else if (code === "auth/too-many-requests") {
+        cleanMsg = "Too many failed attempts. Please wait a few minutes and try again.";
+      } else if (code === "auth/network-request-failed") {
+        cleanMsg = "Network error. Please check your connection and try again.";
       }
       setError(cleanMsg);
       toast.error("Authentication failed", {
@@ -127,6 +139,7 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
                   className="pl-10 h-10 text-sm focus-visible:ring-primary"
                   disabled={loading}
                   required
+                  autoComplete="name"
                 />
               </div>
             </div>
@@ -141,12 +154,13 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="you@qualitrix.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-10 h-10 text-sm focus-visible:ring-primary"
                 disabled={loading}
                 required
+                autoComplete="email"
               />
             </div>
           </div>
@@ -166,6 +180,7 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
                 className="pl-10 pr-10 h-10 text-sm focus-visible:ring-primary"
                 disabled={loading}
                 required
+                autoComplete="current-password"
               />
               <button
                 type="button"

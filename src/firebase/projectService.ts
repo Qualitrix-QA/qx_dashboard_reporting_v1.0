@@ -385,20 +385,48 @@ export async function getShareLinkByLinkId(linkId: string): Promise<ShareLink | 
 /**
  * Redeems a share link when user accesses it after logging in.
  * Converts pending share to permanent access.
+ * If the redeeming user is the project owner, we skip the sharedWith write
+ * so the project does not appear twice (once in My Projects, once in Shared with Me).
  */
 export async function redeemShareLink(linkId: string, userId: string): Promise<string> {
   const shareLinkDoc = await getDoc(doc(db, SHARE_LINKS_COLLECTION, linkId));
   if (!shareLinkDoc.exists()) throw new Error("Share link not found or expired.");
 
-  const { projectId, email } = shareLinkDoc.data();
+  const { projectId } = shareLinkDoc.data();
 
-  // Add user to project.sharedWith (flat array of UIDs)
-  await updateDoc(doc(db, PROJECTS_COLLECTION, projectId), {
-    sharedWith: arrayUnion(userId),
-  });
+  // Check if the redeeming user is the project owner — skip sharedWith update if so.
+  const projectSnap = await getDoc(doc(db, PROJECTS_COLLECTION, projectId));
+  const projectData = projectSnap.exists() ? projectSnap.data() : null;
+  const isOwner = projectData && projectData.ownerId === userId;
 
-  // Remove from shareLinks (optional: keep for audit trail or set accessedAt)
-  // For now, we'll just mark it as accessed
+  if (!isOwner) {
+    // Add user to project.sharedWith (flat array of UIDs)
+    await updateDoc(doc(db, PROJECTS_COLLECTION, projectId), {
+      sharedWith: arrayUnion(userId),
+    });
+
+    // Also create a notification document in Firestore for the redeeming user
+    // so they see the shared project in their notification list.
+    const ownerId = projectData?.ownerId || "";
+    let ownerEmail = "A colleague";
+    if (ownerId) {
+      const ownerProfile = await getUserProfile(ownerId);
+      if (ownerProfile) ownerEmail = ownerProfile.email;
+    }
+
+    await addDoc(collection(db, NOTIFICATIONS_COLLECTION), {
+      recipientUid: userId,
+      senderUid: ownerId,
+      senderEmail: ownerEmail,
+      projectId,
+      projectName: projectData?.name || "Shared Project",
+      type: "project_shared",
+      isRead: false,
+      createdAt: serverTimestamp(),
+    });
+  }
+
+  // Mark the link as accessed for audit purposes
   await updateDoc(shareLinkDoc.ref, {
     accessedAt: Timestamp.now(),
   });
@@ -424,6 +452,9 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 
 /**
  * Lists all projects shared with a user.
+ * Projects owned by the requesting user are excluded — Firestore does not
+ * support combining array-contains with != in a single query, so we filter
+ * client-side after the fetch.
  */
 export async function getUserSharedProjects(uid: string): Promise<ProjectMetadata[]> {
   const q = query(
@@ -432,8 +463,12 @@ export async function getUserSharedProjects(uid: string): Promise<ProjectMetadat
   );
   const snapshot = await getDocs(q);
 
+  // Exclude documents the current user owns so the project they shared never
+  // appears under "Shared with Me" — it already shows in "My Projects".
+  const sharedDocs = snapshot.docs.filter((d) => d.data().ownerId !== uid);
+
   const projects = await Promise.all(
-    snapshot.docs.map(async (d) => {
+    sharedDocs.map(async (d) => {
       const raw = d.data();
       let ownerEmail = "";
       let ownerName = "";
@@ -493,21 +528,19 @@ export async function getUserNotifications(
 ): Promise<Notification[]> {
   let q = query(
     collection(db, NOTIFICATIONS_COLLECTION),
-    where("recipientUid", "==", uid),
-    orderBy("createdAt", "desc")
+    where("recipientUid", "==", uid)
   );
 
   if (unreadOnly) {
     q = query(
       collection(db, NOTIFICATIONS_COLLECTION),
       where("recipientUid", "==", uid),
-      where("isRead", "==", false),
-      orderBy("createdAt", "desc")
+      where("isRead", "==", false)
     );
   }
 
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => {
+  const notifications = snapshot.docs.map((d) => {
     const raw = d.data();
     return {
       id: d.id,
@@ -520,6 +553,9 @@ export async function getUserNotifications(
       read: raw.isRead ?? false,
     };
   });
+
+  // Sort client-side by createdAt descending
+  return notifications.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 /**
@@ -541,8 +577,7 @@ export function subscribeUserNotifications(
 ) {
   const q = query(
     collection(db, NOTIFICATIONS_COLLECTION),
-    where("recipientUid", "==", uid),
-    orderBy("createdAt", "desc")
+    where("recipientUid", "==", uid)
   );
 
   return onSnapshot(
@@ -561,6 +596,8 @@ export function subscribeUserNotifications(
           read: raw.isRead ?? false,
         };
       });
+      // Sort client-side by createdAt descending
+      notifications.sort((a, b) => b.createdAt - a.createdAt);
       callback(notifications);
     },
     (err) => {

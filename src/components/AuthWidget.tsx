@@ -73,15 +73,40 @@ export function AuthWidget() {
     }
   };
 
-  const handleNotificationClick = async (notif: Notification) => {
-    // 1. Mark as read
+  const handleMarkSingleAsRead = async (notif: Notification, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent opening the project and triggering any unsaved changes alert
+    if (notif.read) return;
+
+    // Optimistically update local state immediately
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === notif.id || n.projectId === notif.projectId
+          ? { ...n, read: true }
+          : n
+      )
+    );
+
     try {
-      if (!notif.read) {
-        await markNotificationAsRead(notif.id);
-      }
+      await markNotificationAsRead(notif.id);
+      toast.success("Notification marked as read");
     } catch (err) {
       console.error("Failed to mark notification as read:", err);
+      toast.error("Failed to update notification");
     }
+  };
+
+  const handleNotificationClick = async (notif: Notification) => {
+    // 1. Optimistically mark ALL notifications for this project as read in
+    //    local state immediately — this matches what markProjectNotificationsAsRead
+    //    does in Firestore, so the badge clears instantly without waiting for
+    //    the onSnapshot round-trip.
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === notif.id || n.projectId === notif.projectId
+          ? { ...n, read: true }
+          : n
+      )
+    );
 
     // 2. Guard against dirty state
     if (isDirty) {
@@ -110,8 +135,10 @@ export function AuthWidget() {
       deserializeProject(payload);
       setCurrentProject(copyId, copyMeta.name, copyMeta.description || "");
 
-      // Mark all notifications for the original (owner's) project as read
-      await markProjectNotificationsAsRead(user.uid, notif.projectId);
+      // Persist the read state to Firestore (fire-and-forget — UI is already updated)
+      markProjectNotificationsAsRead(user.uid, notif.projectId).catch((err) =>
+        console.error("Failed to persist mark-as-read:", err)
+      );
 
       toast.success("Project loaded", { description: copyMeta.name });
     } catch (err: any) {
@@ -124,15 +151,22 @@ export function AuthWidget() {
     }
   };
 
+
   const markAllAsRead = async () => {
     if (!user?.uid) return;
+    const unread = notifications.filter((n) => !n.read);
+    if (unread.length === 0) return;
+
+    // Optimistically clear the badge immediately in local state.
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
     try {
-      const unread = notifications.filter((n) => !n.read);
       await Promise.all(unread.map((n) => markNotificationAsRead(n.id)));
       toast.success("All notifications marked as read");
     } catch (err) {
       console.error("Failed to mark all as read:", err);
       toast.error("Failed to update notifications");
+      // onSnapshot will re-sync the true state from Firestore automatically.
     }
   };
 
@@ -195,7 +229,7 @@ export function AuthWidget() {
                       disabled={loadingProjectId !== null}
                     >
                       {!notif.read && (
-                        <span className="absolute top-4 left-2.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                        <span className="absolute top-4 left-2 h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                       )}
                       <div className="flex-1 min-w-0 pl-1">
                         <p className="text-xs font-semibold text-foreground leading-normal">
@@ -210,6 +244,15 @@ export function AuthWidget() {
                           )}
                         </p>
                       </div>
+                      {!notif.read && (
+                        <button
+                          onClick={(e) => handleMarkSingleAsRead(notif, e)}
+                          className="self-center p-1.5 rounded-md hover:bg-muted text-muted-foreground/50 hover:text-primary transition-colors shrink-0 ml-1"
+                          title="Mark as read"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </button>
                   ))
                 )}

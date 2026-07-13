@@ -1,6 +1,10 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useProject } from "@/context/ProjectContext";
-import { Bug, Trash2, Upload as UploadIcon, Settings, History, AlertTriangle, Camera, Scan, ThumbsUp, Sparkles, Plus, Lock, Unlock } from "lucide-react";
+import { Bug, Trash2, Upload as UploadIcon, Settings, History, AlertTriangle, Camera, Scan, ThumbsUp, Sparkles, Plus, Lock, Unlock, Loader2 } from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import { redeemShareLink, getOrCreateRecipientCopy } from "@/firebase/projectService";
+import { toast } from "sonner";
 import { FileUpload } from "@/components/FileUpload";
 import { GoogleSheetsConnect } from "@/components/GoogleSheetsConnect";
 import { JiraConnect } from "@/components/JiraConnect";
@@ -12,6 +16,7 @@ import { DynamicCharts } from "@/components/DynamicCharts";
 import { DynamicTable } from "@/components/DynamicTable";
 import { DynamicDetailDrawer } from "@/components/DynamicDetailDrawer";
 import { SettingsModal } from "@/components/SettingsModal";
+import { AuthModal } from "@/components/AuthModal";
 import { AIInsightsPanel } from "@/components/AIInsightsPanel";
 import { ExportBar } from "@/components/ExportBar";
 import { AuthWidget } from "@/components/AuthWidget";
@@ -41,6 +46,9 @@ import { parseWorkbook, type SheetInfo } from "@/utils/excelParser";
 import { analyzeColumns, dynamicAggregate } from "@/utils/columnAnalyzer";
 import { getActiveApiKey, getActiveModel } from "@/utils/aiProviders";
 import { generateAISchema, generateFallbackSchema, detectDataTypeHeuristic } from "@/utils/aiSchema";
+import { detectDatasetType } from "@/utils/datasetDetector";
+import { generateReport } from "@/utils/reportGenerators";
+import { GeneratedReportView } from "@/components/GeneratedReportView";
 import {
   saveBugData, loadBugData,
   savePreferences, loadPreferences, clearAllData,
@@ -209,16 +217,65 @@ export default function Dashboard() {
   const [globalEditMode, setGlobalEditMode] = useState<boolean>(false);
 
   // Slide visibility aliases (sourced from ProjectContext for cleaner JSX)
-  const showProdIssues        = slideVisibility["prod_issues"];
-  const showBugAnalytics      = slideVisibility["bug_analytics"];
-  const showTestCoverage      = slideVisibility["test_coverage"];
-  const showManualExecution   = slideVisibility["manual_execution"];
+  const showProdIssues = slideVisibility["prod_issues"];
+  const showBugAnalytics = slideVisibility["bug_analytics"];
+  const showTestCoverage = slideVisibility["test_coverage"];
+  const showManualExecution = slideVisibility["manual_execution"];
   const showAutomationExecution = slideVisibility["automation_execution"];
-  const showNewInitiatives    = slideVisibility["new_initiatives"];
-  const showRiskMitigation    = slideVisibility["risk_mitigation"];
+  const showNewInitiatives = slideVisibility["new_initiatives"];
+  const showRiskMitigation = slideVisibility["risk_mitigation"];
 
   // Track current analysis record ID to update (not duplicate) on insights generation
   const currentAnalysisId = useRef<string | null>(null);
+
+  const { linkId } = useParams<{ linkId?: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [redeemingLink, setRedeemingLink] = useState(false);
+  const [forceSignUpOpen, setForceSignUpOpen] = useState(false);
+  const { deserializeProject, setCurrentProject } = useProject();
+
+  useEffect(() => {
+    if (!linkId) return;
+
+    if (!user) {
+      setForceSignUpOpen(true);
+      toast.info("Please sign up to access this shared project.", {
+        id: "share-auth-required",
+        duration: 8000,
+      });
+      return;
+    } else {
+      setForceSignUpOpen(false);
+    }
+
+    const redeem = async () => {
+      setRedeemingLink(true);
+      try {
+        const originalProjectId = await redeemShareLink(linkId, user.uid);
+        const { metadata, payload } = await getOrCreateRecipientCopy(originalProjectId, user.uid);
+        deserializeProject(payload);
+        setCurrentProject(metadata.id, metadata.name, metadata.description);
+        toast.success(`Successfully imported shared project: "${metadata.name}"`);
+        navigate("/", { replace: true });
+      } catch (err: any) {
+        console.error("Error redeeming share link:", err);
+        toast.error(err.message || "Failed to import shared project. Please check if the link is valid.");
+        navigate("/", { replace: true });
+      } finally {
+        setRedeemingLink(false);
+      }
+    };
+
+    redeem();
+  }, [linkId, user, deserializeProject, setCurrentProject, navigate]);
+
+  const generatedReport = useMemo(() => {
+    if (rows.length === 0) return null;
+    const headers = Object.keys(rows[0]);
+    const detection = detectDatasetType(headers, rows);
+    return generateReport(detection.type, detection.confidence, detection.fieldMap, headers, rows);
+  }, [rows]);
 
   useEffect(() => {
     (async () => {
@@ -299,7 +356,7 @@ export default function Dashboard() {
     }
 
     hasUserSelectedTab.current = false;
-    setActiveTab("project_level");
+    setActiveTab("smart_report");
     setRows(allRows);
     setFilteredRows(allRows);
     setLatestInsights(null);
@@ -388,7 +445,7 @@ export default function Dashboard() {
     setPendingJiraProjects(null);
     setPendingJiraConfig(null);
     hasUserSelectedTab.current = false;
-    setActiveTab("project_level");
+    setActiveTab("smart_report");
     setRows(newRows);
     setFilteredRows(newRows);
     setLatestInsights(null);
@@ -495,7 +552,7 @@ export default function Dashboard() {
       setLatestInsights(null);
       setAiSchema(null);
       setTruncationWarning("");
-      
+
       setGlobalEditMode(true);
       setActiveTab("specialized_qa");
 
@@ -878,6 +935,11 @@ export default function Dashboard() {
               className="space-y-6"
             >
               <TabsList className="flex h-auto flex-wrap items-center justify-start gap-1.5 border border-border bg-card/45 p-1.5 backdrop-blur-md rounded-xl">
+                {/* {generatedReport && (
+                  <TabsTrigger value="smart_report" className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                    Smart Report
+                  </TabsTrigger>
+                )} */}
                 <TabsTrigger value="project_level" className="rounded-lg px-4 py-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   Project Level Dashboard
                 </TabsTrigger>
@@ -888,6 +950,19 @@ export default function Dashboard() {
                   Specialized QA Dashboards
                 </TabsTrigger>
               </TabsList>
+
+              {generatedReport && (
+                <TabsContent id="tab-smart_report" value="smart_report" className="mt-4 outline-none space-y-8 animate-fade-in">
+                  <GeneratedReportView
+                    report={generatedReport}
+                    theme={theme}
+                    onNavigateToExplorer={() => {
+                      hasUserSelectedTab.current = true;
+                      setActiveTab("report_explorer");
+                    }}
+                  />
+                </TabsContent>
+              )}
 
               <TabsContent id="tab-project_level" value="project_level" className="mt-4 outline-none space-y-8 animate-fade-in">
                 <ProjectLevelDashboard isEditable={globalEditMode} theme={theme} data={projectLevelData} onUpdateData={setProjectLevelData} />
@@ -1258,11 +1333,30 @@ export default function Dashboard() {
         onSave={handleSavePrefs}
       />
 
+      <AuthModal
+        open={forceSignUpOpen}
+        onOpenChange={(open) => {
+          setForceSignUpOpen(open);
+          if (!open) {
+            navigate("/", { replace: true });
+          }
+        }}
+        defaultToSignUp={true}
+      />
+
       <InsightsSidebar
         open={showSidebar}
         onClose={() => setShowSidebar(false)}
         onLoadRecord={handleLoadRecord}
       />
+
+      {redeemingLink && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-md animate-fade-in">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-3" />
+          <p className="text-sm font-semibold text-foreground">Importing shared project...</p>
+          <p className="text-xs text-muted-foreground mt-1">Setting up your independent personal workspace...</p>
+        </div>
+      )}
     </div>
   );
 }
