@@ -140,6 +140,8 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
   const [showAgingEditor, setShowAgingEditor] = useState(false);
   const [showDensityEditor, setShowDensityEditor] = useState(false);
   const [showVelocityEditor, setShowVelocityEditor] = useState(false);
+  // Local draft: stores the raw string the user is typing so backspace / spinners work
+  const [kpiDraft, setKpiDraft] = useState<Record<string, string>>({});
 
   // Dynamic multipliers based on active filters for immersive premium feel
   const activeScale = useMemo(() => {
@@ -160,7 +162,7 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
 
   // Scaled Data representing the filtered results
   const liveData = useMemo(() => {
-    const scale = (val: number) => Math.round(val * (activeScale / 100));
+    const scale = (val: number) => Math.round(val * activeScale);
     return {
       ...baseData,
       totalExecutable: scale(baseData.totalExecutable),
@@ -187,7 +189,14 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
   }, [baseData, activeScale]);
 
   // Handle in-place KPI edits (updates the base data model)
+  // Called on every keystroke — only updates local draft
+  const handleKPIChangeRaw = (key: keyof ProjectLevelData, val: string) => {
+    setKpiDraft(prev => ({ ...prev, [key as string]: val }));
+  };
+
+  // Called on blur — commits the parsed number to the data model
   const handleKPIChange = (key: keyof ProjectLevelData, val: string) => {
+    setKpiDraft(prev => { const n = { ...prev }; delete n[key as string]; return n; });
     const num = Math.max(0, parseInt(val) || 0);
     setBaseData(prev => ({
       ...prev,
@@ -651,8 +660,9 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
                     {isEditable ? (
                       <input
                         type="number"
-                        value={card.value}
-                        onChange={(e) => handleKPIChange(card.key as any, e.target.value)}
+                        value={kpiDraft[card.key] !== undefined ? kpiDraft[card.key] : card.value}
+                        onChange={(e) => handleKPIChangeRaw(card.key as any, e.target.value)}
+                        onBlur={(e) => handleKPIChange(card.key as any, e.target.value)}
                         className="w-full bg-transparent border-0 text-center font-extrabold p-0 focus:ring-0 rounded-none text-xl focus:border-b focus:border-primary/50 hover:border-b hover:border-primary/20 cursor-text"
                       />
                     ) : (
@@ -681,8 +691,9 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
                     {isEditable ? (
                       <input
                         type="number"
-                        value={card.value}
-                        onChange={(e) => handleKPIChange(card.key as any, e.target.value)}
+                        value={kpiDraft[card.key] !== undefined ? kpiDraft[card.key] : card.value}
+                        onChange={(e) => handleKPIChangeRaw(card.key as any, e.target.value)}
+                        onBlur={(e) => handleKPIChange(card.key as any, e.target.value)}
                         className="w-full bg-transparent border-0 text-center font-extrabold p-0 focus:ring-0 rounded-none text-xl focus:border-b focus:border-primary/50 hover:border-b hover:border-primary/20 cursor-text"
                       />
                     ) : (

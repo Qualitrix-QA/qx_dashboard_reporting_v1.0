@@ -62,11 +62,10 @@ export function SheetSelector({ sheets, onSelect, onCancel }: SheetSelectorProps
               <button
                 key={sheet.name}
                 onClick={() => toggleSheet(i)}
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors ${
-                  isSelected
+                className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors ${isSelected
                     ? "bg-primary/10 border border-primary/30"
                     : "hover:bg-muted border border-transparent"
-                }`}
+                  }`}
               >
                 {isSelected ? (
                   <CheckSquare className="h-4.5 w-4.5 shrink-0 text-primary" />

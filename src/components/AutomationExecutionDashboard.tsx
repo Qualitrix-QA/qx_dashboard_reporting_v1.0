@@ -30,6 +30,8 @@ export function AutomationExecutionDashboard({ rows, analysis, aiSchema, data: e
   const data = useMemo(() => externalData ?? getAutomationExecutionData(rows, analysis, aiSchema), [rows, analysis, aiSchema, externalData]);
 
   const [showHistoryEditor, setShowHistoryEditor] = useState(false);
+  // Local draft: stores the raw string the user is typing so backspace / spinners work
+  const [kpiDraft, setKpiDraft] = useState<Record<string, string>>({});
 
   const isDark = theme !== "light";
   const colors = {
@@ -100,8 +102,15 @@ export function AutomationExecutionDashboard({ rows, analysis, aiSchema, data: e
     };
   }, [data.runHistory, isDark]);
 
+  // Called on every keystroke — only updates local draft
+  const handleKPIChangeRaw = (key: string, val: string) => {
+    setKpiDraft(prev => ({ ...prev, [key]: val }));
+  };
+
+  // Called on blur — commits the parsed number to the data model
   const handleKPIChange = (key: string, val: string) => {
     if (!onUpdateData) return;
+    setKpiDraft(prev => { const n = { ...prev }; delete n[key]; return n; });
     const intVal = Math.max(0, parseInt(val) || 0);
     const updated = { ...data };
     if (key === "totalAutoTCs") updated.totalAutoTCs = intVal;
@@ -334,8 +343,9 @@ export function AutomationExecutionDashboard({ rows, analysis, aiSchema, data: e
                 {isEditable ? (
                   <input
                     type="number"
-                    value={card.value}
-                    onChange={(e) => handleKPIChange(card.key, e.target.value)}
+                    value={kpiDraft[card.key] !== undefined ? kpiDraft[card.key] : card.value}
+                    onChange={(e) => handleKPIChangeRaw(card.key, e.target.value)}
+                    onBlur={(e) => handleKPIChange(card.key, e.target.value)}
                     className={`w-full bg-transparent border-0 text-center font-extrabold tracking-tight focus:ring-0 p-0 shadow-none text-3xl rounded-none focus:border-b focus:border-primary/40 hover:border-b hover:border-primary/20 cursor-text ${card.color.split(" ")[1]}`}
                     disabled={!onUpdateData}
                   />

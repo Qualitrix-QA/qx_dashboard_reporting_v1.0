@@ -30,6 +30,8 @@ interface Props {
 export function ProdIssuesDashboard({ rows, analysis, aiSchema, data: propData, onUpdateData, onReset, hasOverrides, isEditable = false, theme, onDelete }: Props) {
   const data = useMemo(() => propData || getProdIssuesData(rows, analysis, aiSchema), [rows, analysis, aiSchema, propData]);
   const [showTrendEditor, setShowTrendEditor] = useState(false);
+  // Local draft: stores the raw string the user is typing so backspace / spinners work
+  const [kpiDraft, setKpiDraft] = useState<Record<string, string>>({});
 
   const isDark = theme !== "light";
   const colors = {
@@ -92,8 +94,15 @@ export function ProdIssuesDashboard({ rows, analysis, aiSchema, data: propData, 
     };
   }, [data.weeklyTrend, isDark]);
 
+  // Called on every keystroke — only updates local draft
+  const handleKPIChangeRaw = (label: string, val: string) => {
+    setKpiDraft(prev => ({ ...prev, [label]: val }));
+  };
+
+  // Called on blur — commits the parsed number to the data model
   const handleKPIChange = (label: string, val: string) => {
     if (!onUpdateData) return;
+    setKpiDraft(prev => { const n = { ...prev }; delete n[label]; return n; });
     const numVal = Math.max(0, parseInt(val) || 0);
     const updated = { ...data };
     if (label === "Total Prod Issues") updated.totalProdIssues = numVal;
@@ -327,8 +336,9 @@ export function ProdIssuesDashboard({ rows, analysis, aiSchema, data: propData, 
                 {isEditable ? (
                   <input
                     type="number"
-                    value={card.value}
-                    onChange={(e) => handleKPIChange(card.label, e.target.value)}
+                    value={kpiDraft[card.label] !== undefined ? kpiDraft[card.label] : card.value}
+                    onChange={(e) => handleKPIChangeRaw(card.label, e.target.value)}
+                    onBlur={(e) => handleKPIChange(card.label, e.target.value)}
                     className={`w-full bg-transparent border-0 text-center font-extrabold tracking-tight focus:ring-0 p-0 shadow-none text-3xl rounded-none focus:border-b focus:border-primary/40 hover:border-b hover:border-primary/20 cursor-text ${card.color.split(" ")[1]}`}
                     disabled={!onUpdateData}
                   />
