@@ -366,11 +366,17 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   // ── Auth-aware clean up ────────────────────────────────────────────────────
   useEffect(() => {
-    if (user?.uid !== prevUserUid.current) {
-      console.log("[Verification Log] Auth user changed. Clearing local project context data. Old UID:", prevUserUid.current, "New UID:", user?.uid);
+    const prevUid = prevUserUid.current;
+    const nextUid = user?.uid ?? null;
+
+    // Only clear when switching between two real users (e.g. sign out + sign in as someone else).
+    // Do NOT clear on the initial null → uid transition that happens on every page load
+    // while Firebase resolves the auth state — that would wipe the IndexedDB-restored rows.
+    if (prevUid !== null && nextUid !== prevUid) {
+      console.log("[Verification Log] Auth user changed. Clearing local project context data. Old UID:", prevUid, "New UID:", nextUid);
       clearProjectData();
-      prevUserUid.current = user?.uid ?? null;
     }
+    prevUserUid.current = nextUid;
   }, [user?.uid, clearProjectData]);
 
   // ── Serialization ─────────────────────────────────────────────────────────
