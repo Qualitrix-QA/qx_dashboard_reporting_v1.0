@@ -755,6 +755,16 @@ export default function Dashboard() {
                   setTheme={setTheme}
                   globalEditMode={globalEditMode}
                   setGlobalEditMode={setGlobalEditMode}
+                  projectLevelData={projectLevelData}
+                  specializedQAData={{
+                    prodIssuesData,
+                    bugAnalyticsData,
+                    testCoverageData,
+                    manualExecutionData,
+                    automationExecutionData,
+                    newInitiativesData,
+                    riskMitigationData,
+                  }}
                 />
                 <button
                   onClick={() => setShowSidebar(true)}

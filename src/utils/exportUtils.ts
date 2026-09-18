@@ -1,4 +1,15 @@
 import type { RawRow, DataAnalysis, DynamicAggregations, AISchema } from "@/types/bug";
+import * as XLSX from "xlsx";
+import type { 
+  ProjectLevelData,
+  ProdIssuesData,
+  BugAnalyticsData,
+  TestCoverageData,
+  ManualExecutionData,
+  AutomationExecutionData,
+  NewInitiativesData,
+  RiskMitigationData
+} from "@/utils/dashboardMapper";
 
 const INTERNAL_COLUMNS = ["__sheet"];
 
