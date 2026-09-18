@@ -40,9 +40,13 @@ function getDB() {
   });
 }
 
+export const HAS_CACHED_DATA_KEY = "qualitylens_has_cached_data";
+
 export async function saveBugData(rows: RawRow[], fileName: string, dataFormat?: DataFormat, googleConfig?: GoogleSheetsConfig, jiraConfig?: JiraConfig) {
   const db = await getDB();
   await db.put("bugs", { id: "latest", rows, fileName, timestamp: Date.now(), dataFormat, googleConfig, jiraConfig }, "latest");
+  // Synchronous flag so Index.tsx can avoid the async-flash on page load
+  localStorage.setItem(HAS_CACHED_DATA_KEY, "true");
 }
 
 export async function loadBugData(): Promise<{ rows: RawRow[]; fileName: string; timestamp: number; dataFormat?: DataFormat; googleConfig?: GoogleSheetsConfig; jiraConfig?: JiraConfig } | undefined> {
@@ -79,6 +83,9 @@ export async function clearAllData() {
   const db = await getDB();
   await db.clear("bugs");
   await db.clear("templates");
+  localStorage.removeItem(HAS_CACHED_DATA_KEY);
+  localStorage.removeItem("qualitylens_ai_schema");
+  localStorage.removeItem("qualitylens_active_tab");
 
   // Clear localStorage keys for dashboard custom state
   localStorage.removeItem("qualitylens_dashboard_overrides");

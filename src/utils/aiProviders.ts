@@ -9,6 +9,7 @@ export const AI_PROVIDERS: AIProviderConfig[] = [
     keyUrl: "https://console.groq.com/keys",
     models: [
       { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", maxTokens: 65536 },
+      { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", maxTokens: 65536 },
     ],
   },
   {

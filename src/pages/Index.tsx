@@ -53,6 +53,7 @@ import {
   saveBugData, loadBugData,
   savePreferences, loadPreferences, clearAllData,
   saveAnalysisRecord, updateAnalysisRecord, type AnalysisRecord,
+  HAS_CACHED_DATA_KEY,
 } from "@/utils/store";
 import {
   detectModuleColumn, detectRiskColumn, calculateModuleRisks,
@@ -193,10 +194,16 @@ export default function Dashboard() {
     handleAddNote,
     handleDeleteNote,
     clearProjectData,
+    currentProjectId,
   } = useProject();
 
   // ── Local UI/App state (NOT serialized as project) ───────────────────────
   const [isLoading, setIsLoading] = useState(false);
+  // isRestoring: initialized SYNCHRONOUSLY from localStorage — no async delay, no flash.
+  // true only when we know IndexedDB has data waiting to be loaded.
+  const [isRestoring, setIsRestoring] = useState(
+    () => localStorage.getItem(HAS_CACHED_DATA_KEY) === "true"
+  );
   const [selectedRow, setSelectedRow] = useState<RawRow | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [prefs, setPrefs] = useState<UserPreferences>(DEFAULT_PREFS);
@@ -212,9 +219,38 @@ export default function Dashboard() {
 
   const [schemaLoading, setSchemaLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<string>("project_level");
-  const hasUserSelectedTab = useRef(false);
+  const [activeTab, setActiveTab] = useState<string>(
+    () => localStorage.getItem("qualitylens_active_tab") || "project_level"
+  );
+  // If the user had a specific tab saved, treat it as a deliberate selection
+  // so the auto-switch logic doesn't clobber it on schema load.
+  const hasUserSelectedTab = useRef(
+    (localStorage.getItem("qualitylens_active_tab") || "project_level") !== "project_level"
+  );
   const [globalEditMode, setGlobalEditMode] = useState<boolean>(false);
+
+  // Persist active tab so refresh lands on the same tab
+  useEffect(() => {
+    localStorage.setItem("qualitylens_active_tab", activeTab);
+  }, [activeTab]);
+
+  // Ref to signal the schema-generation effect that a schema was just
+  // restored from localStorage and should NOT be overwritten.
+  const schemaRestoredRef = useRef(false);
+
+  // Warn before leaving if there's unsaved project data
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only warn if there is data loaded and it hasn't been saved to the cloud (currentProjectId is null)
+      if (rows.length > 0 && !currentProjectId) {
+        e.preventDefault();
+        e.returnValue = ""; // Standard way to trigger the native browser warning
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [rows.length, currentProjectId]);
 
   // Slide visibility aliases (sourced from ProjectContext for cleaner JSX)
   const showProdIssues = slideVisibility["prod_issues"];
@@ -291,6 +327,17 @@ export default function Dashboard() {
       if (cached) {
         setRows(cached.rows);
         setFileName(cached.fileName);
+        // Restore aiSchema from localStorage (small JSON — field mappings only).
+        // Set the flag BEFORE setAiSchema so the generation effect skips on first run.
+        const savedSchema = localStorage.getItem("qualitylens_ai_schema");
+        if (savedSchema) {
+          try {
+            schemaRestoredRef.current = true;
+            setAiSchema(JSON.parse(savedSchema));
+          } catch {
+            // Corrupt data — let the generation effect rebuild it
+          }
+        }
         if (cached.googleConfig) setGoogleConfig(cached.googleConfig);
         if (cached.jiraConfig) {
           const sanitized = { ...cached.jiraConfig };
@@ -306,6 +353,7 @@ export default function Dashboard() {
           setJiraConfig(sanitized);
         }
       }
+      setIsRestoring(false);
     })();
   }, []);
 
@@ -676,6 +724,12 @@ export default function Dashboard() {
   useEffect(() => {
     if (!rows.length || !rawAnalysis.columns.length) return;
 
+    // If aiSchema was just restored from localStorage, skip regeneration.
+    if (schemaRestoredRef.current) {
+      schemaRestoredRef.current = false;
+      return;
+    }
+
     const rawAgg = dynamicAggregate(rows, rawAnalysis);
     const activeKey = getActiveApiKey(prefs);
     if (!prefs.aiEnabled || !activeKey) {
@@ -711,6 +765,13 @@ export default function Dashboard() {
 
     return () => { cancelled = true; };
   }, [rows, rawAnalysis, prefs.aiEnabled, prefs.aiProvider, prefs.aiModel, prefs.apiKeys]);
+
+  // Persist aiSchema to localStorage whenever it changes (it's small — no rows, just field mappings)
+  useEffect(() => {
+    if (aiSchema) {
+      localStorage.setItem("qualitylens_ai_schema", JSON.stringify(aiSchema));
+    }
+  }, [aiSchema]);
 
   const hasData = rows.length > 0;
   const activeKey = getActiveApiKey(prefs);
@@ -825,7 +886,12 @@ export default function Dashboard() {
           </div>
         )}
 
-        {!hasData ? (
+        {isRestoring ? (
+          <div className="flex flex-col items-center justify-center pt-32 gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Restoring your session…</p>
+          </div>
+        ) : !hasData ? (
           <div className="mx-auto max-w-xl pt-20 animate-fade-in">
             <div className="mb-8 text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 animate-pulse-glow">
