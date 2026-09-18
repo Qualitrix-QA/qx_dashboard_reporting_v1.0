@@ -59,9 +59,17 @@ export type ParseResult = {
   totalRowsParsed: number;
 };
 
+/** Returns only the sheet names that are visible (not hidden or very-hidden). */
+function getVisibleSheetNames(wb: XLSX.WorkBook): string[] {
+  return wb.SheetNames.filter((_, i) => {
+    const hidden = wb.Workbook?.Sheets?.[i]?.Hidden;
+    return !hidden; // 0 or undefined = visible, 1 = hidden, 2 = very hidden
+  });
+}
+
 export function parseWorkbook(data: ArrayBuffer): SheetInfo[] {
   const wb = XLSX.read(data, { type: "array" });
-  return wb.SheetNames.map((name) => {
+  return getVisibleSheetNames(wb).map((name) => {
     const sheet = wb.Sheets[name];
     const headerRowIndex = detectHeaderRow(sheet);
     const headers = getHeaders(sheet, headerRowIndex);
@@ -97,7 +105,7 @@ export function parseWorkbookWithMeta(data: ArrayBuffer): ParseResult {
   let truncated = false;
   let totalRowsParsed = 0;
 
-  const sheets = wb.SheetNames.map((name) => {
+  const sheets = getVisibleSheetNames(wb).map((name) => {
     const sheet = wb.Sheets[name];
     const headerRowIndex = detectHeaderRow(sheet);
     const headers = getHeaders(sheet, headerRowIndex);

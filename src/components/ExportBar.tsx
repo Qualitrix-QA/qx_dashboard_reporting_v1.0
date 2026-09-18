@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { Download, FileText, Loader2 } from "lucide-react";
+import { Download, FileText, Loader2, Sheet } from "lucide-react";
 import { exportCSV, exportLandscapePDF } from "@/utils/exportUtils";
+import { exportExcel } from "@/utils/excelExportUtils";
+import type { SpecializedQAData } from "@/utils/excelExportUtils";
+import type { ProjectLevelData } from "@/utils/dashboardMapper";
 import type { RawRow, DataAnalysis, DynamicAggregations, AISchema } from "@/types/bug";
 
 interface ExportBarProps {
@@ -16,6 +19,8 @@ interface ExportBarProps {
   setTheme: (theme: "light" | "dark") => void;
   globalEditMode: boolean;
   setGlobalEditMode: (val: boolean) => void;
+  projectLevelData?: ProjectLevelData | null;
+  specializedQAData?: SpecializedQAData | null;
 }
 
 export function ExportBar({
@@ -31,8 +36,11 @@ export function ExportBar({
   setTheme,
   globalEditMode,
   setGlobalEditMode,
+  projectLevelData,
+  specializedQAData,
 }: ExportBarProps) {
   const [landscapePdfLoading, setLandscapePdfLoading] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
 
   const baseName = fileName
@@ -42,6 +50,17 @@ export function ExportBar({
 
   const handleCSV = () => {
     exportCSV(bugs, `${baseName}-export.csv`);
+  };
+
+  const handleExcel = async () => {
+    setExcelLoading(true);
+    try {
+      await exportExcel(projectLevelData, specializedQAData, `${baseName}-export.xlsx`);
+    } catch (e) {
+      console.error("Excel export failed:", e);
+    } finally {
+      setExcelLoading(false);
+    }
   };
 
   const handleLandscapePDF = async () => {
@@ -101,6 +120,24 @@ export function ExportBar({
       >
         <Download className="h-3.5 w-3.5" />
         CSV
+      </button>
+      <button
+        onClick={handleExcel}
+        disabled={excelLoading}
+        className="flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+        title="Export to Excel with interactive Product & Sprint filter dropdowns"
+      >
+        {excelLoading ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Generating…
+          </>
+        ) : (
+          <>
+            <Sheet className="h-3.5 w-3.5" />
+            Excel
+          </>
+        )}
       </button>
       <button
         onClick={handleLandscapePDF}

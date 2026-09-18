@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Sparkles, Edit3, Trash2, Plus, Search, HelpCircle, Activity, LayoutGrid, CheckCircle } from "lucide-react";
+import { Sparkles, Edit3, Trash2, Plus, Search, HelpCircle, Activity, LayoutGrid, CheckCircle, X } from "lucide-react";
 import ReactEChartsCore from "echarts-for-react/lib/core";
 import * as echarts from "echarts/core";
 import { BarChart, PieChart, LineChart } from "echarts/charts";
@@ -142,6 +142,8 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
   const [showVelocityEditor, setShowVelocityEditor] = useState(false);
   // Local draft: stores the raw string the user is typing so backspace / spinners work
   const [kpiDraft, setKpiDraft] = useState<Record<string, string>>({});
+  // Local draft for RAG arrays
+  const [ragDraft, setRagDraft] = useState<Record<string, string>>({});
 
   // Dynamic multipliers based on active filters for immersive premium feel
   const activeScale = useMemo(() => {
@@ -223,8 +225,9 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
   };
 
   // ECharts Configurations
+  const defaultChartColors = ["#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6"];
+
   const projectWiseRAGOption = useMemo(() => {
-    const ragColors = { Green: "#10b981", Yellow: "#f59e0b", Red: "#ef4444" };
     return {
       tooltip: {
         trigger: "item",
@@ -244,9 +247,9 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
           },
           label: { show: false },
           labelLine: { show: false },
-          data: liveData.projectWiseRAG.map(d => ({
+          data: liveData.projectWiseRAG.map((d, i) => ({
             ...d,
-            itemStyle: { color: ragColors[d.name as keyof typeof ragColors] || "#94a3b8" }
+            itemStyle: { color: defaultChartColors[i % defaultChartColors.length] }
           }))
         }
       ]
@@ -254,7 +257,6 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
   }, [liveData.projectWiseRAG, isDark]);
 
   const sprintWiseRAGOption = useMemo(() => {
-    const ragColors = { Green: "#10b981", Yellow: "#f59e0b", Red: "#ef4444" };
     return {
       tooltip: {
         trigger: "axis",
@@ -278,9 +280,9 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
       series: [
         {
           type: "bar",
-          data: liveData.sprintWiseRAG.map(d => ({
+          data: liveData.sprintWiseRAG.map((d, i) => ({
             value: d.value,
-            itemStyle: { color: ragColors[d.name as keyof typeof ragColors] || "#94a3b8", borderRadius: [0, 4, 4, 0] }
+            itemStyle: { color: defaultChartColors[i % defaultChartColors.length], borderRadius: [0, 4, 4, 0] }
           })),
           barMaxWidth: 12
         }
@@ -741,21 +743,53 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
                 {showRAGEditor && isEditable && (
                   <div className="space-y-1.5 pt-2 border-t border-border/20 mt-1 text-[10px]">
                     {baseData.projectWiseRAG.map((item, idx) => (
-                      <div key={item.name} className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-foreground">{item.name}:</span>
+                      <div key={`proj_${idx}`} className="flex items-center justify-between gap-1">
+                        <input
+                          type="text"
+                          value={item.name}
+                          onChange={(e) => {
+                            const copy = [...baseData.projectWiseRAG];
+                            copy[idx] = { ...copy[idx], name: e.target.value };
+                            setBaseData({ ...baseData, projectWiseRAG: copy });
+                          }}
+                          className="flex-1 min-w-0 bg-muted/50 border border-border rounded text-[10px] py-0.5 px-1 font-semibold text-foreground"
+                          placeholder="Label"
+                        />
                         <input
                           type="number"
-                          value={item.value}
-                          onChange={(e) => {
+                          value={ragDraft[`proj_${idx}`] !== undefined ? ragDraft[`proj_${idx}`] : item.value}
+                          onChange={(e) => setRagDraft(prev => ({ ...prev, [`proj_${idx}`]: e.target.value }))}
+                          onBlur={(e) => {
+                            setRagDraft(prev => { const n = { ...prev }; delete n[`proj_${idx}`]; return n; });
                             const val = Math.max(0, parseInt(e.target.value) || 0);
                             const copy = [...baseData.projectWiseRAG];
                             copy[idx] = { ...copy[idx], value: val };
                             setBaseData({ ...baseData, projectWiseRAG: copy });
                           }}
-                          className="w-12 bg-muted/50 border border-border rounded text-[10px] py-0.5 px-1 text-center"
+                          className="w-10 bg-muted/50 border border-border rounded text-[10px] py-0.5 px-1 text-center"
                         />
+                        <button
+                          onClick={() => {
+                            const copy = baseData.projectWiseRAG.filter((_, i) => i !== idx);
+                            setBaseData({ ...baseData, projectWiseRAG: copy });
+                          }}
+                          className="text-destructive hover:bg-destructive/10 p-0.5 rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                     ))}
+                    <button
+                      onClick={() => {
+                        setBaseData({
+                          ...baseData,
+                          projectWiseRAG: [...baseData.projectWiseRAG, { name: "New", value: 1 }]
+                        });
+                      }}
+                      className="w-full mt-1 flex items-center justify-center gap-1 text-[9px] text-primary bg-primary/10 hover:bg-primary/20 py-1 rounded transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> Add Item
+                    </button>
                   </div>
                 )}
               </div>
@@ -786,21 +820,53 @@ export function ProjectLevelDashboard({ isEditable = false, theme, data: baseDat
                 {showRAGEditor && isEditable && (
                   <div className="space-y-1.5 pt-2 border-t border-border/20 mt-1 text-[10px]">
                     {baseData.sprintWiseRAG.map((item, idx) => (
-                      <div key={item.name} className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-foreground">{item.name}:</span>
+                      <div key={`sprint_${idx}`} className="flex items-center justify-between gap-1">
+                        <input
+                          type="text"
+                          value={item.name}
+                          onChange={(e) => {
+                            const copy = [...baseData.sprintWiseRAG];
+                            copy[idx] = { ...copy[idx], name: e.target.value };
+                            setBaseData({ ...baseData, sprintWiseRAG: copy });
+                          }}
+                          className="flex-1 min-w-0 bg-muted/50 border border-border rounded text-[10px] py-0.5 px-1 font-semibold text-foreground"
+                          placeholder="Label"
+                        />
                         <input
                           type="number"
-                          value={item.value}
-                          onChange={(e) => {
+                          value={ragDraft[`sprint_${idx}`] !== undefined ? ragDraft[`sprint_${idx}`] : item.value}
+                          onChange={(e) => setRagDraft(prev => ({ ...prev, [`sprint_${idx}`]: e.target.value }))}
+                          onBlur={(e) => {
+                            setRagDraft(prev => { const n = { ...prev }; delete n[`sprint_${idx}`]; return n; });
                             const val = Math.max(0, parseInt(e.target.value) || 0);
                             const copy = [...baseData.sprintWiseRAG];
                             copy[idx] = { ...copy[idx], value: val };
                             setBaseData({ ...baseData, sprintWiseRAG: copy });
                           }}
-                          className="w-12 bg-muted/50 border border-border rounded text-[10px] py-0.5 px-1 text-center"
+                          className="w-10 bg-muted/50 border border-border rounded text-[10px] py-0.5 px-1 text-center"
                         />
+                        <button
+                          onClick={() => {
+                            const copy = baseData.sprintWiseRAG.filter((_, i) => i !== idx);
+                            setBaseData({ ...baseData, sprintWiseRAG: copy });
+                          }}
+                          className="text-destructive hover:bg-destructive/10 p-0.5 rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                     ))}
+                    <button
+                      onClick={() => {
+                        setBaseData({
+                          ...baseData,
+                          sprintWiseRAG: [...baseData.sprintWiseRAG, { name: "New", value: 1 }]
+                        });
+                      }}
+                      className="w-full mt-1 flex items-center justify-center gap-1 text-[9px] text-primary bg-primary/10 hover:bg-primary/20 py-1 rounded transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> Add Item
+                    </button>
                   </div>
                 )}
               </div>

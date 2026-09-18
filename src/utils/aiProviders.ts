@@ -8,10 +8,7 @@ export const AI_PROVIDERS: AIProviderConfig[] = [
     keyPrefix: "gsk_",
     keyUrl: "https://console.groq.com/keys",
     models: [
-      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", maxTokens: 4096 },
-      { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B (Fast)", maxTokens: 4096 },
-      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", maxTokens: 4096 },
-      { id: "gemma2-9b-it", name: "Gemma 2 9B", maxTokens: 4096 },
+      { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", maxTokens: 65536 },
     ],
   },
   {

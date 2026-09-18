@@ -19,11 +19,15 @@ export async function signUp(email: string, password: string, displayName?: stri
     await updateProfile(userCredential.user, { displayName });
   }
   if (userCredential.user) {
-    await createOrUpdateUserRecord(
-      userCredential.user.uid,
-      userCredential.user.email || email,
-      displayName || userCredential.user.displayName || ""
-    );
+    try {
+      await createOrUpdateUserRecord(
+        userCredential.user.uid,
+        userCredential.user.email || email,
+        displayName || userCredential.user.displayName || ""
+      );
+    } catch (error) {
+      console.warn("Non-fatal: Failed to create user record in Firestore:", error);
+    }
   }
   return userCredential.user;
 }
@@ -34,11 +38,15 @@ export async function signUp(email: string, password: string, displayName?: stri
 export async function signIn(email: string, password: string): Promise<User> {
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
   if (userCredential.user) {
-    await createOrUpdateUserRecord(
-      userCredential.user.uid,
-      userCredential.user.email || email,
-      userCredential.user.displayName || ""
-    );
+    try {
+      await createOrUpdateUserRecord(
+        userCredential.user.uid,
+        userCredential.user.email || email,
+        userCredential.user.displayName || ""
+      );
+    } catch (error) {
+      console.warn("Non-fatal: Failed to update user record in Firestore on sign-in:", error);
+    }
   }
   return userCredential.user;
 }
